@@ -153,22 +153,11 @@ impl Router {
             }
         }
 
-        // Wait up to 2 seconds for active agent tasks to completely stop executing and drop
-        let wait_start = std::time::Instant::now();
-        while self
-            .active_agents_count
-            .load(std::sync::atomic::Ordering::SeqCst)
-            > 0
-            && wait_start.elapsed() < std::time::Duration::from_secs(2)
-        {
-            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
-        }
-
         let run_id = self.current_run_id.lock().unwrap().clone();
         let worktrees: Vec<std::path::PathBuf> = self.current_worktrees.lock().unwrap().clone();
 
-        // 2. Persist terminal cancelled status in StateDb and MemState FIRST before cleanup
-        // to guarantee records are terminal even if worktree removal times out or is aborted.
+        // 2. Persist terminal cancelled status in StateDb and MemState IMMEDIATELY
+        // to guarantee records are terminal even before waiting on tasks or worktree cleanup.
         if let Some(ref rid) = run_id {
             if let Ok(Some(run_rec)) = self.state_db.get_run(rid) {
                 if let Ok(spec) = serde_json::from_str::<RunSpec>(&run_rec.spec_json) {
@@ -203,7 +192,18 @@ impl Router {
             }
         }
 
-        // 3. Bound cleanup to 4 seconds so a hanging git command cannot block shutdown forever
+        // 3. Wait up to 1.5 seconds for active agent tasks to completely stop executing and drop
+        let wait_start = std::time::Instant::now();
+        while self
+            .active_agents_count
+            .load(std::sync::atomic::Ordering::SeqCst)
+            > 0
+            && wait_start.elapsed() < std::time::Duration::from_millis(1500)
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+
+        // 4. Bound cleanup to 4 seconds so a hanging git command cannot block shutdown forever
         let cleanup_timeout = std::time::Duration::from_secs(4);
         let cleanup_fut = async {
             for wt in &worktrees {

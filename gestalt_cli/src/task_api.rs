@@ -57,9 +57,9 @@ pub async fn finalize_active_task_runs(timeout: Option<Duration>) {
 
     // Finalize all active runs concurrently: abort the outer task, await its termination,
     // and then cancel the router so all state records and worktrees are cleanly finalized.
-    // Default to 8 seconds if not specified (covers the 2s agent task drain + 4s worktree cleanup with headroom),
-    // or respect the remaining shutdown budget with a safe floor of 2 seconds.
-    let total_timeout = timeout.unwrap_or(Duration::from_secs(8)).max(Duration::from_secs(2));
+    // Default to 8 seconds if not specified (covers the agent task drain + worktree cleanup with headroom),
+    // or respect the remaining shutdown budget with a safe floor of 4 seconds (allowing immediate state persistence and task drain).
+    let total_timeout = timeout.unwrap_or(Duration::from_secs(8)).max(Duration::from_secs(4));
     let cancel_all_fut = async {
         let mut join_set = tokio::task::JoinSet::new();
         for entry in entries {
@@ -206,22 +206,21 @@ pub async fn serve_with_shutdown(
                     .await
             });
 
-            tokio::select! {
+            let select_res = tokio::select! {
                 res = &mut server_task => {
                     match res {
-                        Ok(inner) => inner?,
-                        Err(e) => return Err(e.into()),
+                        Ok(inner) => inner.map_err(|e| Box::new(e) as Box<dyn std::error::Error>),
+                        Err(e) => Err(Box::new(e) as Box<dyn std::error::Error>),
                     }
                 }
                 _ = wait => {
                     let _ = shutdown_tx.send(());
-                    let drain_start = std::time::Instant::now();
                     // Axum is now draining in the background. Enforce drain_deadline.
                     match tokio::time::timeout(drain_deadline, &mut server_task).await {
                         Ok(res) => {
                             match res {
-                                Ok(inner) => inner?,
-                                Err(e) => return Err(e.into()),
+                                Ok(inner) => inner.map_err(|e| Box::new(e) as Box<dyn std::error::Error>),
+                                Err(e) => Err(Box::new(e) as Box<dyn std::error::Error>),
                             }
                         }
                         Err(_) => {
@@ -232,15 +231,15 @@ pub async fn serve_with_shutdown(
                             cancel_token.cancel();
                             server_task.abort();
                             let _ = server_task.await;
+                            Ok(())
                         }
                     }
-                    tracing::info!("Event Bus + Task API stopped accepting connections (drained)");
-                    // Calculate remaining drain budget for active task finalization
-                    let remaining_budget = drain_deadline.saturating_sub(drain_start.elapsed());
-                    // Cancel and clean up any in-flight Task API orchestrations within remaining budget
-                    finalize_active_task_runs(Some(remaining_budget)).await;
                 }
-            }
+            };
+            tracing::info!("Event Bus + Task API stopped accepting connections (drained)");
+            // Always cancel and clean up any in-flight Task API orchestrations on exit
+            finalize_active_task_runs(Some(drain_deadline)).await;
+            select_res?;
         },
         None => {
             axum::serve(listener, app).await?;
