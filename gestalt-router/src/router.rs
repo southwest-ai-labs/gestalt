@@ -52,6 +52,8 @@ pub struct Router {
     pub active_agent_handles: std::sync::Mutex<Vec<tokio::task::AbortHandle>>,
     /// Counter of active in-flight agent tasks being executed.
     pub active_agents_count: Arc<std::sync::atomic::AtomicUsize>,
+    /// Atomic flag indicating that the current run was cancelled.
+    pub is_run_cancelled: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Router {
@@ -91,6 +93,7 @@ impl Router {
             current_worktrees: std::sync::Mutex::new(Vec::new()),
             active_agent_handles: std::sync::Mutex::new(Vec::new()),
             active_agents_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            is_run_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         };
 
         // Spawn LiveConflictDetector if a WebSocket server is configured
@@ -138,6 +141,10 @@ impl Router {
     /// terminal `cancelled` status for the run record. Failures are logged
     /// but never propagated, so shutdown cannot hang on this path.
     pub async fn cancel_current_run(&self) {
+        // Mark run as cancelled immediately so any in-flight agent task aborts further work/state writes
+        self.is_run_cancelled
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
         // 1. Abort all in-flight agent tasks immediately so their subprocesses/threads terminate
         {
             let handles = self.active_agent_handles.lock().unwrap().clone();
@@ -386,6 +393,8 @@ impl Router {
             })?;
 
         // Track the active run so a cancellation can finalize it.
+        self.is_run_cancelled
+            .store(false, std::sync::atomic::Ordering::SeqCst);
         *self.current_run_id.lock().unwrap() = Some(run_id_str.clone());
         *self.current_worktrees.lock().unwrap() = Vec::new();
         self.active_agent_handles.lock().unwrap().clear();
@@ -490,6 +499,7 @@ impl Router {
             let log_opt = self.log.clone();
             let ws_server = self.ws_server.clone();
             let count_tracker = self.active_agents_count.clone();
+            let is_cancelled = self.is_run_cancelled.clone();
 
             count_tracker.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             struct TaskGuard(Arc<std::sync::atomic::AtomicUsize>);
@@ -502,6 +512,19 @@ impl Router {
 
             let handle = join_set.spawn(async move {
                 let _guard = task_guard;
+                if is_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                    return Ok(AgentResult {
+                        agent_id,
+                        state: AgentState::Crashed,
+                        output: None,
+                        error: Some("Run cancelled before agent dispatch".to_string()),
+                        branch: None,
+                        duration_ms: 0,
+                        changed_files: Vec::new(),
+                        run_id: Some(run_id_clone),
+                        worktree_path: Some(wt_path.to_string_lossy().to_string()),
+                    });
+                }
                 // Set agent state to Running in MemState
                 mem_state.set_agent_state(
                     &run_id_str_clone,
@@ -577,6 +600,22 @@ impl Router {
                 )
                 .await?;
 
+                // Guard: If run was cancelled while agent executed, do not run checkpoint
+                // on potentially deleted/locked worktrees, and do not overwrite terminal state.
+                if is_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                    return Ok(AgentResult {
+                        agent_id,
+                        state: AgentState::Crashed,
+                        output: run_result.output,
+                        error: Some("Run cancelled during execution".to_string()),
+                        branch: run_result.branch,
+                        duration_ms: run_result.duration_ms,
+                        changed_files: Vec::new(),
+                        run_id: run_result.run_id,
+                        worktree_path: run_result.worktree_path,
+                    });
+                }
+
                 // Run Checkpoint
                 let checkpoint_res = crate::checkpoint::run_checkpoint(&wt_path, &agent_id);
 
@@ -601,6 +640,11 @@ impl Router {
                 };
 
                 run_result.state = final_state.clone();
+
+                // Guard again before mutating MemState and StateDb
+                if is_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                    return Ok(run_result);
+                }
 
                 // Update final state in MemState
                 mem_state.set_agent_state(&run_id_str_clone, &agent_id, &final_state.to_string());

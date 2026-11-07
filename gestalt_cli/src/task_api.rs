@@ -44,8 +44,8 @@ fn active_runs() -> &'static std::sync::Mutex<HashMap<usize, ActiveRunEntry>> {
 }
 
 /// Finalize and cancel all in-flight Task API orchestrations on server shutdown concurrently,
-/// bounded by a shared deadline to ensure bounded shutdown.
-pub async fn finalize_active_task_runs() {
+/// bounded by a given timeout deadline to ensure bounded overall shutdown.
+pub async fn finalize_active_task_runs(timeout: Option<Duration>) {
     let entries: Vec<ActiveRunEntry> = {
         let mut guard = active_runs().lock().unwrap();
         guard.drain().map(|(_, v)| v).collect()
@@ -57,8 +57,9 @@ pub async fn finalize_active_task_runs() {
 
     // Finalize all active runs concurrently: abort the outer task, await its termination,
     // and then cancel the router so all state records and worktrees are cleanly finalized.
-    // Allow up to 8 seconds (covers the 2s agent task drain + 4s worktree cleanup with headroom).
-    let total_timeout = std::time::Duration::from_secs(8);
+    // Default to 8 seconds if not specified (covers the 2s agent task drain + 4s worktree cleanup with headroom),
+    // or respect the remaining shutdown budget with a safe floor of 2 seconds.
+    let total_timeout = timeout.unwrap_or(Duration::from_secs(8)).max(Duration::from_secs(2));
     let cancel_all_fut = async {
         let mut join_set = tokio::task::JoinSet::new();
         for entry in entries {
@@ -214,6 +215,7 @@ pub async fn serve_with_shutdown(
                 }
                 _ = wait => {
                     let _ = shutdown_tx.send(());
+                    let drain_start = std::time::Instant::now();
                     // Axum is now draining in the background. Enforce drain_deadline.
                     match tokio::time::timeout(drain_deadline, &mut server_task).await {
                         Ok(res) => {
@@ -232,11 +234,13 @@ pub async fn serve_with_shutdown(
                             let _ = server_task.await;
                         }
                     }
+                    tracing::info!("Event Bus + Task API stopped accepting connections (drained)");
+                    // Calculate remaining drain budget for active task finalization
+                    let remaining_budget = drain_deadline.saturating_sub(drain_start.elapsed());
+                    // Cancel and clean up any in-flight Task API orchestrations within remaining budget
+                    finalize_active_task_runs(Some(remaining_budget)).await;
                 }
             }
-            tracing::info!("Event Bus + Task API stopped accepting connections (drained)");
-            // Cancel and clean up any in-flight Task API orchestrations
-            finalize_active_task_runs().await;
         },
         None => {
             axum::serve(listener, app).await?;
