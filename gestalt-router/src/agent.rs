@@ -316,6 +316,7 @@ impl AgentRunner for SubprocessRunner {
 
         // 2. Build the Command
         let mut cmd = tokio::process::Command::new(&spec.command);
+        cmd.kill_on_drop(true);
         cmd.args(&spec.args);
         cmd.current_dir(worktree);
 
@@ -454,6 +455,10 @@ impl AgentRunner for SubprocessRunner {
             },
         }
 
+        // Terminate any lingering background child processes before awaiting copy tasks
+        // so children inheriting stdout/stderr do not hold pipes open and block execution.
+        reaper.kill_forcefully();
+
         // Wait for stdout and stderr copying tasks to finish
         let _ = stdout_handle.await;
         let _ = stderr_handle.await;
@@ -494,6 +499,7 @@ impl AgentRunner for SubprocessRunner {
         // 5. Gather files changed via git status --porcelain
         let mut files_changed = Vec::new();
         let mut git_cmd = tokio::process::Command::new("git");
+        git_cmd.kill_on_drop(true);
         git_cmd
             .arg("status")
             .arg("--porcelain")

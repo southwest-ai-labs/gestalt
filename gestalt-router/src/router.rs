@@ -29,7 +29,7 @@ pub struct Router {
     pub state_db: Arc<StateDb>,
     pub mem_state: MemState,
     pub log: Option<Arc<dyn EventLog>>,
-    pub xavier: Option<XavierClient>,
+    pub xavier: std::sync::Mutex<Option<XavierClient>>,
     /// Local BM25 search engine for offline context retrieval.
     pub search_engine: Option<Arc<dyn LocalSearchEngine>>,
     /// Optional WebSocket server for broadcasting timeline events.
@@ -48,6 +48,10 @@ pub struct Router {
     pub current_run_id: std::sync::Mutex<Option<String>>,
     /// Worktree paths created for the current run, for cancellation cleanup.
     pub current_worktrees: std::sync::Mutex<Vec<std::path::PathBuf>>,
+    /// Active agent task handles for in-flight run cancellation and draining.
+    pub active_agent_handles: std::sync::Mutex<Vec<tokio::task::AbortHandle>>,
+    /// Counter of active in-flight agent tasks being executed.
+    pub active_agents_count: Arc<std::sync::atomic::AtomicUsize>,
 }
 
 impl Router {
@@ -73,7 +77,7 @@ impl Router {
             state_db,
             mem_state,
             log,
-            xavier: None,
+            xavier: std::sync::Mutex::new(None),
             search_engine: None,
             ws_server,
             worktrees: Arc::new(WorktreeManager::new(std::path::PathBuf::from(
@@ -85,6 +89,8 @@ impl Router {
             health_cache: Arc::new(HealthCache::new()),
             current_run_id: std::sync::Mutex::new(None),
             current_worktrees: std::sync::Mutex::new(Vec::new()),
+            active_agent_handles: std::sync::Mutex::new(Vec::new()),
+            active_agents_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
         };
 
         // Spawn LiveConflictDetector if a WebSocket server is configured
@@ -98,9 +104,14 @@ impl Router {
     }
 
     /// Attach an optional Xavier client for memory/context integration.
-    pub fn with_xavier(mut self, xavier: XavierClient) -> Self {
-        self.xavier = Some(xavier);
+    pub fn with_xavier(self, xavier: XavierClient) -> Self {
+        *self.xavier.lock().unwrap() = Some(xavier);
         self
+    }
+
+    /// Mutably set the Xavier client on an existing router instance.
+    pub fn set_xavier(&self, xavier: XavierClient) {
+        *self.xavier.lock().unwrap() = Some(xavier);
     }
 
     /// Attach a local BM25 search engine for offline context retrieval.
@@ -127,17 +138,57 @@ impl Router {
     /// terminal `cancelled` status for the run record. Failures are logged
     /// but never propagated, so shutdown cannot hang on this path.
     pub async fn cancel_current_run(&self) {
-        let run_id = self.current_run_id.lock().unwrap().clone();
-        let worktrees: Vec<std::path::PathBuf> = self.current_worktrees.lock().unwrap().clone();
-
-        for wt in &worktrees {
-            if let Err(e) = self.worktrees.cleanup_worktree(wt).await {
-                tracing::warn!("cancel_current_run: cleanup failed for {:?}: {}", wt, e);
+        // 1. Abort all in-flight agent tasks immediately so their subprocesses/threads terminate
+        {
+            let handles = self.active_agent_handles.lock().unwrap().clone();
+            for handle in handles {
+                handle.abort();
             }
         }
 
-        if let Some(rid) = run_id {
-            if let Err(e) = self.state_db.complete_run(&rid, "cancelled") {
+        // Wait up to 2 seconds for active agent tasks to completely stop executing and drop
+        let wait_start = std::time::Instant::now();
+        while self
+            .active_agents_count
+            .load(std::sync::atomic::Ordering::SeqCst)
+            > 0
+            && wait_start.elapsed() < std::time::Duration::from_secs(2)
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+
+        let run_id = self.current_run_id.lock().unwrap().clone();
+        let worktrees: Vec<std::path::PathBuf> = self.current_worktrees.lock().unwrap().clone();
+
+        // 2. Persist terminal cancelled status in StateDb and MemState FIRST before cleanup
+        // to guarantee records are terminal even if worktree removal times out or is aborted.
+        if let Some(ref rid) = run_id {
+            if let Ok(Some(run_rec)) = self.state_db.get_run(rid) {
+                if let Ok(spec) = serde_json::from_str::<RunSpec>(&run_rec.spec_json) {
+                    for agent in spec.agents {
+                        let current_state = self.mem_state.get_agent_state(rid, &agent.id);
+                        // Transition active/non-terminal agents (Pending / Running) to Crashed
+                        let is_active = matches!(
+                            current_state.as_deref(),
+                            Some("running") | Some("pending") | None
+                        );
+                        if is_active {
+                            self.mem_state.set_agent_state(rid, &agent.id, "crashed");
+                            let _ = self.state_db.upsert_agent(
+                                rid,
+                                &agent.id,
+                                "crashed",
+                                None,
+                                Some("Run cancelled during execution"),
+                                0,
+                                "[]",
+                            );
+                        }
+                    }
+                }
+            }
+
+            if let Err(e) = self.state_db.complete_run(rid, "cancelled") {
                 tracing::warn!(
                     "cancel_current_run: failed to persist cancelled status: {}",
                     e
@@ -145,8 +196,29 @@ impl Router {
             }
         }
 
+        // 3. Bound cleanup to 4 seconds so a hanging git command cannot block shutdown forever
+        let cleanup_timeout = std::time::Duration::from_secs(4);
+        let cleanup_fut = async {
+            for wt in &worktrees {
+                if let Err(e) = self.worktrees.cleanup_worktree(wt).await {
+                    tracing::warn!("cancel_current_run: cleanup failed for {:?}: {}", wt, e);
+                }
+            }
+        };
+
+        if tokio::time::timeout(cleanup_timeout, cleanup_fut)
+            .await
+            .is_err()
+        {
+            tracing::warn!(
+                "cancel_current_run: worktree cleanup timed out after {:?}",
+                cleanup_timeout
+            );
+        }
+
         *self.current_run_id.lock().unwrap() = None;
         self.current_worktrees.lock().unwrap().clear();
+        self.active_agent_handles.lock().unwrap().clear();
     }
 
     /// Configure the maximum number of retry attempts for transient failures.
@@ -240,7 +312,8 @@ impl Router {
         }
 
         // Fall back to Xavier remote
-        if let Some(ref xavier) = self.xavier {
+        let xavier_opt = self.xavier.lock().unwrap().clone();
+        if let Some(ref xavier) = xavier_opt {
             let ctx = xavier.search_context(task, limit).await;
             if !ctx.is_empty() {
                 tracing::info!("Xavier context fetched for task: {} results", ctx.len());
@@ -280,7 +353,7 @@ impl Router {
     fn emit_bus_event(&self, ev: BusEvent) {
         // Persist to the shared timeline (dedup + sink happen here).
         let db = self.state_db.clone();
-        let xavier = self.xavier.clone();
+        let xavier = self.xavier.lock().unwrap().clone();
         tokio::spawn(async move {
             let sink = xavier.map(crate::xavier_sink::XavierEventSink::new);
             let _ = crate::event_bus::handle_event(&db, &ev, sink.as_ref()).await;
@@ -315,6 +388,7 @@ impl Router {
         // Track the active run so a cancellation can finalize it.
         *self.current_run_id.lock().unwrap() = Some(run_id_str.clone());
         *self.current_worktrees.lock().unwrap() = Vec::new();
+        self.active_agent_handles.lock().unwrap().clear();
 
         // 3. PRE: Fetch relevant context from local BM25 (offline) or Xavier (remote)
         let search_context = self.fetch_context(&spec.task, 5).await;
@@ -362,6 +436,12 @@ impl Router {
         let mut wt_paths = HashMap::new();
 
         for agent in &spec.agents {
+            let planned_wt = self
+                .worktrees
+                .base_dir
+                .join(format!("{}-{}", run_id, agent.id));
+            self.current_worktrees.lock().unwrap().push(planned_wt);
+
             match self
                 .worktrees
                 .create_worktree(run_id, &agent.id, &base_sha)
@@ -369,8 +449,7 @@ impl Router {
             {
                 Ok(path) => {
                     created_wts.push(path.clone());
-                    wt_paths.insert(agent.id.clone(), path.clone());
-                    self.current_worktrees.lock().unwrap().push(path);
+                    wt_paths.insert(agent.id.clone(), path);
                 },
                 Err(e) => {
                     // Cleanup already created worktrees
@@ -410,8 +489,19 @@ impl Router {
             let mem_state = self.mem_state.clone();
             let log_opt = self.log.clone();
             let ws_server = self.ws_server.clone();
+            let count_tracker = self.active_agents_count.clone();
 
-            join_set.spawn(async move {
+            count_tracker.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            struct TaskGuard(Arc<std::sync::atomic::AtomicUsize>);
+            impl Drop for TaskGuard {
+                fn drop(&mut self) {
+                    self.0.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                }
+            }
+            let task_guard = TaskGuard(count_tracker);
+
+            let handle = join_set.spawn(async move {
+                let _guard = task_guard;
                 // Set agent state to Running in MemState
                 mem_state.set_agent_state(
                     &run_id_str_clone,
@@ -550,6 +640,7 @@ impl Router {
 
                 Ok::<AgentResult, RouterError>(run_result)
             });
+            self.active_agent_handles.lock().unwrap().push(handle);
         }
 
         // Wait for all agents to finish
@@ -622,16 +713,21 @@ impl Router {
             .collect();
 
         if !branches_to_merge.is_empty() {
+            let integrate_wt = self
+                .worktrees
+                .base_dir
+                .join(format!("{}-{}", run_id, "_integrate"));
+            self.current_worktrees
+                .lock()
+                .unwrap()
+                .push(integrate_wt.clone());
+
             match self
                 .worktrees
                 .create_worktree(run_id, "_integrate", &base_sha)
                 .await
             {
                 Ok(integrate_wt_path) => {
-                    self.current_worktrees
-                        .lock()
-                        .unwrap()
-                        .push(integrate_wt_path.clone());
                     let mut queue = SerialMergeQueue::new(
                         integrate_wt_path.clone(),
                         base_sha.clone(),
@@ -728,6 +824,7 @@ impl Router {
         // Clear cancellation tracking on successful completion.
         *self.current_run_id.lock().unwrap() = None;
         self.current_worktrees.lock().unwrap().clear();
+        self.active_agent_handles.lock().unwrap().clear();
 
         // 11. POST: Archive run results as memory in Xavier
         let events_path = self
@@ -767,7 +864,8 @@ impl Router {
         }
 
         // 11b. Archive in Xavier (if available)
-        if let Some(ref xavier) = self.xavier {
+        let xavier_opt = self.xavier.lock().unwrap().clone();
+        if let Some(ref xavier) = xavier_opt {
             let metadata = serde_json::json!({
                 "run_id": run_id.to_string(),
                 "task": spec.task,
