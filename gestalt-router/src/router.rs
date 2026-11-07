@@ -141,16 +141,6 @@ impl Router {
     /// terminal `cancelled` status for the run record. Failures are logged
     /// but never propagated, so shutdown cannot hang on this path.
     pub async fn cancel_current_run(&self) {
-        self.cancel_current_run_with_drain(true).await;
-    }
-
-    /// Cancellation finalization with optional agent task drain and worktree cleanup.
-    ///
-    /// When `drain_and_cleanup` is true, awaits active agent tasks (up to 1.5s)
-    /// and removes worktrees. When false, marks cancellation and persists terminal
-    /// crashed/cancelled states immediately and synchronously in StateDb and MemState
-    /// without awaiting background tasks.
-    pub async fn cancel_current_run_with_drain(&self, drain_and_cleanup: bool) {
         // Mark run as cancelled immediately so any in-flight agent task aborts further work/state writes
         self.is_run_cancelled
             .store(true, std::sync::atomic::Ordering::SeqCst);
@@ -204,14 +194,6 @@ impl Router {
                     e
                 );
             }
-        }
-
-        if !drain_and_cleanup {
-            // Immediate synchronous return after state persistence without waiting
-            *self.current_run_id.lock().unwrap() = None;
-            self.current_worktrees.lock().unwrap().clear();
-            self.active_agent_handles.lock().unwrap().clear();
-            return;
         }
 
         // 3. Wait up to 1.5 seconds for active agent tasks to completely stop executing and drop

@@ -62,14 +62,15 @@ pub async fn finalize_active_task_runs(timeout: Option<Duration>) {
     let total_timeout = timeout.unwrap_or(Duration::from_secs(8));
 
     if total_timeout.is_zero() {
-        tracing::warn!("finalize_active_task_runs: shutdown budget exhausted; immediately aborting tasks and persisting terminal state");
-        // Abort handles and synchronously persist terminal state without blocking on task drain/cleanup
-        for entry in entries {
-            entry.join_handle.abort();
-            entry.router.cancel_current_run_with_drain(false).await;
-        }
-        return;
+        tracing::warn!("finalize_active_task_runs: shutdown budget exhausted; draining tasks with minimal bound");
     }
+    // Bound cancellation to total_timeout when positive, or a guaranteed 2s slice when HTTP drain exhausted the budget,
+    // ensuring the outer task awaits termination, agent reconciliation runs, and worktrees are cleaned up safely.
+    let cancel_budget = if total_timeout.is_zero() {
+        Duration::from_secs(2)
+    } else {
+        total_timeout
+    };
 
     let cancel_all_fut = async {
         let mut join_set = tokio::task::JoinSet::new();
@@ -85,13 +86,13 @@ pub async fn finalize_active_task_runs(timeout: Option<Duration>) {
         while join_set.join_next().await.is_some() {}
     };
 
-    if tokio::time::timeout(total_timeout, cancel_all_fut)
+    if tokio::time::timeout(cancel_budget, cancel_all_fut)
         .await
         .is_err()
     {
         tracing::warn!(
             "finalize_active_task_runs: concurrent cancellation timed out after {:?}",
-            total_timeout
+            cancel_budget
         );
     }
 }
