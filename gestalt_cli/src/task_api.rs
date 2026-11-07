@@ -58,8 +58,12 @@ pub async fn finalize_active_task_runs(timeout: Option<Duration>) {
     // Finalize all active runs concurrently: abort the outer task, await its termination,
     // and then cancel the router so all state records and worktrees are cleanly finalized.
     // Default to 8 seconds if not specified (covers the agent task drain + worktree cleanup with headroom),
-    // or respect the remaining shutdown budget with a safe floor of 4 seconds (allowing immediate state persistence and task drain).
-    let total_timeout = timeout.unwrap_or(Duration::from_secs(8)).max(Duration::from_secs(4));
+    // clamped to any provided remaining shutdown budget.
+    let total_timeout = timeout.unwrap_or(Duration::from_secs(8));
+    if total_timeout.is_zero() {
+        tracing::warn!("finalize_active_task_runs: shutdown budget exhausted; skipping active run drain");
+        return;
+    }
     let cancel_all_fut = async {
         let mut join_set = tokio::task::JoinSet::new();
         for entry in entries {
@@ -206,6 +210,7 @@ pub async fn serve_with_shutdown(
                     .await
             });
 
+            let drain_start = std::time::Instant::now();
             let select_res = tokio::select! {
                 res = &mut server_task => {
                     match res {
@@ -237,8 +242,10 @@ pub async fn serve_with_shutdown(
                 }
             };
             tracing::info!("Event Bus + Task API stopped accepting connections (drained)");
-            // Always cancel and clean up any in-flight Task API orchestrations on exit
-            finalize_active_task_runs(Some(drain_deadline)).await;
+            // Calculate remaining drain budget for active task finalization so total shutdown
+            // cannot exceed GESTALT_SHUTDOWN_TIMEOUT_MS across both HTTP drain and task finalization.
+            let remaining_budget = drain_deadline.saturating_sub(drain_start.elapsed());
+            finalize_active_task_runs(Some(remaining_budget)).await;
             select_res?;
         },
         None => {

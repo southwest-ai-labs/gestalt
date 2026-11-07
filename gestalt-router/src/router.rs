@@ -203,6 +203,35 @@ impl Router {
             tokio::time::sleep(std::time::Duration::from_millis(25)).await;
         }
 
+        // 3b. Final reconciliation: ensure no late agent task wrote a non-terminal or successful
+        // state during cancellation race before completing termination.
+        if let Some(ref rid) = run_id {
+            if let Ok(Some(run_rec)) = self.state_db.get_run(rid) {
+                if let Ok(spec) = serde_json::from_str::<RunSpec>(&run_rec.spec_json) {
+                    for agent in spec.agents {
+                        let current_state = self.mem_state.get_agent_state(rid, &agent.id);
+                        let is_non_terminal_or_racing = matches!(
+                            current_state.as_deref(),
+                            Some("running") | Some("pending") | Some("success") | Some("nochanges") | None
+                        );
+                        if is_non_terminal_or_racing {
+                            self.mem_state.set_agent_state(rid, &agent.id, "crashed");
+                            let _ = self.state_db.upsert_agent(
+                                rid,
+                                &agent.id,
+                                "crashed",
+                                None,
+                                Some("Run cancelled during execution"),
+                                0,
+                                "[]",
+                            );
+                        }
+                    }
+                }
+            }
+            let _ = self.state_db.complete_run(rid, "cancelled");
+        }
+
         // 4. Bound cleanup to 4 seconds so a hanging git command cannot block shutdown forever
         let cleanup_timeout = std::time::Duration::from_secs(4);
         let cleanup_fut = async {
