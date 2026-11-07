@@ -62,13 +62,11 @@ pub async fn finalize_active_task_runs(timeout: Option<Duration>) {
     let total_timeout = timeout.unwrap_or(Duration::from_secs(8));
 
     if total_timeout.is_zero() {
-        tracing::warn!("finalize_active_task_runs: shutdown budget exhausted; aborting active tasks without waiting");
-        // Abort handles and trigger cancellation without blocking past the exhausted deadline
+        tracing::warn!("finalize_active_task_runs: shutdown budget exhausted; immediately aborting tasks and persisting terminal state");
+        // Abort handles and synchronously persist terminal state without blocking on task drain/cleanup
         for entry in entries {
             entry.join_handle.abort();
-            tokio::spawn(async move {
-                entry.router.cancel_current_run().await;
-            });
+            entry.router.cancel_current_run_with_drain(false).await;
         }
         return;
     }
