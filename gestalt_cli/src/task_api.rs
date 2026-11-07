@@ -60,6 +60,19 @@ pub async fn finalize_active_task_runs(timeout: Option<Duration>) {
     // Default to 8 seconds if not specified (covers the agent task drain + worktree cleanup with headroom),
     // clamped to any provided remaining shutdown budget.
     let total_timeout = timeout.unwrap_or(Duration::from_secs(8));
+
+    if total_timeout.is_zero() {
+        tracing::warn!("finalize_active_task_runs: shutdown budget exhausted; aborting active tasks without waiting");
+        // Abort handles and trigger cancellation without blocking past the exhausted deadline
+        for entry in entries {
+            entry.join_handle.abort();
+            tokio::spawn(async move {
+                entry.router.cancel_current_run().await;
+            });
+        }
+        return;
+    }
+
     let cancel_all_fut = async {
         let mut join_set = tokio::task::JoinSet::new();
         for entry in entries {
@@ -73,14 +86,6 @@ pub async fn finalize_active_task_runs(timeout: Option<Duration>) {
         }
         while join_set.join_next().await.is_some() {}
     };
-
-    if total_timeout.is_zero() {
-        tracing::warn!("finalize_active_task_runs: shutdown budget exhausted; running immediate cancellation without timeout wait");
-        // Even when the budget is zero, invoke cancel_all_fut synchronously with a minimal slice
-        // so that handles are aborted and terminal cancellation state is written.
-        let _ = tokio::time::timeout(Duration::from_millis(500), cancel_all_fut).await;
-        return;
-    }
 
     if tokio::time::timeout(total_timeout, cancel_all_fut)
         .await

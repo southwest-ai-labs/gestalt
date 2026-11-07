@@ -207,23 +207,20 @@ impl Router {
             tokio::time::sleep(std::time::Duration::from_millis(25)).await;
         }
 
-        // 3b. Final reconciliation: ONLY reconcile agents that were active during cancellation
-        // to protect legitimate earlier terminal results (Success / NoChanges) from being overwritten.
+        // 3b. Final reconciliation: ALWAYS persist crashed state for agents that were active during cancellation
+        // directly into StateDb (and MemState) to guarantee the persistent SQLite record is never overwritten by a late racing write.
         if let Some(ref rid) = run_id {
             for agent_id in &active_agent_ids {
-                let current_state = self.mem_state.get_agent_state(rid, agent_id);
-                if current_state.as_deref() != Some("crashed") {
-                    self.mem_state.set_agent_state(rid, agent_id, "crashed");
-                    let _ = self.state_db.upsert_agent(
-                        rid,
-                        agent_id,
-                        "crashed",
-                        None,
-                        Some("Run cancelled during execution"),
-                        0,
-                        "[]",
-                    );
-                }
+                self.mem_state.set_agent_state(rid, agent_id, "crashed");
+                let _ = self.state_db.upsert_agent(
+                    rid,
+                    agent_id,
+                    "crashed",
+                    None,
+                    Some("Run cancelled during execution"),
+                    0,
+                    "[]",
+                );
             }
             let _ = self.state_db.complete_run(rid, "cancelled");
         }
