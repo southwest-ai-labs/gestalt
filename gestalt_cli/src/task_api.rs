@@ -59,18 +59,19 @@ pub async fn finalize_active_task_runs(timeout: Option<Duration>) {
     // and then cancel the router so all state records and worktrees are cleanly finalized.
     // Default to 8 seconds if not specified (covers the agent task drain + worktree cleanup with headroom),
     // clamped to any provided remaining shutdown budget.
-    let total_timeout = timeout.unwrap_or(Duration::from_secs(8));
-
-    if total_timeout.is_zero() {
-        tracing::warn!("finalize_active_task_runs: shutdown budget exhausted; draining tasks with minimal bound");
+    // 1. Immediately abort the outer orchestration join handles so they stop dispatching new work
+    for entry in &entries {
+        entry.join_handle.abort();
     }
-    // Bound cancellation to total_timeout when positive, or a guaranteed 2s slice when HTTP drain exhausted the budget,
-    // ensuring the outer task awaits termination, agent reconciliation runs, and worktrees are cleaned up safely.
-    let cancel_budget = if total_timeout.is_zero() {
-        Duration::from_secs(2)
-    } else {
-        total_timeout
-    };
+
+    // 2. Finalize all active runs concurrently:
+    // When drain is invoked, each entry calls `r.cancel_current_run()`, which persists terminal
+    // crashed/cancelled states in SQLite immediately, waits up to 1.5s for agent tasks to drop,
+    // reconciles any racing writes, and cleans up worktrees (up to 4s).
+    // Allow up to 8s (or total_timeout when larger), providing sufficient headroom so worktree
+    // cleanup is never prematurely interrupted.
+    let total_timeout = timeout.unwrap_or(Duration::from_secs(8));
+    let cancel_budget = total_timeout.max(Duration::from_secs(8));
 
     let cancel_all_fut = async {
         let mut join_set = tokio::task::JoinSet::new();
@@ -78,7 +79,6 @@ pub async fn finalize_active_task_runs(timeout: Option<Duration>) {
             let r = entry.router.clone();
             let handle = entry.join_handle;
             join_set.spawn(async move {
-                handle.abort();
                 let _ = handle.await;
                 r.cancel_current_run().await;
             });
