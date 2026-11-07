@@ -59,6 +59,7 @@ pub async fn finalize_active_task_runs(timeout: Option<Duration>) {
     // and then cancel the router so all state records and worktrees are cleanly finalized.
     // Default to 8 seconds if not specified (covers the agent task drain + worktree cleanup with headroom),
     // clamped to any provided remaining shutdown budget.
+    let sync_start = std::time::Instant::now();
     // 1. Immediately abort the outer orchestration join handles so they stop dispatching new work
     for entry in &entries {
         entry.join_handle.abort();
@@ -72,8 +73,9 @@ pub async fn finalize_active_task_runs(timeout: Option<Duration>) {
     }
 
     // 3. Graceful asynchronous phase: await in-flight task termination, perform racing-write reconciliation,
-    // and cleanup worktrees within the provided remaining shutdown budget.
-    let cancel_budget = timeout.unwrap_or(Duration::from_secs(8));
+    // and cleanup worktrees within the provided remaining shutdown budget (discounting the time taken by sync persistence).
+    let raw_budget = timeout.unwrap_or(Duration::from_secs(8));
+    let cancel_budget = raw_budget.saturating_sub(sync_start.elapsed());
     if cancel_budget.is_zero() {
         tracing::warn!("finalize_active_task_runs: shutdown budget exhausted; terminal state persisted, skipping task drain");
         return;

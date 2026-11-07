@@ -54,6 +54,8 @@ pub struct Router {
     pub active_agents_count: Arc<std::sync::atomic::AtomicUsize>,
     /// Atomic flag indicating that the current run was cancelled.
     pub is_run_cancelled: Arc<std::sync::atomic::AtomicBool>,
+    /// Agents that were actively running/pending when cancellation was triggered.
+    pub cancelled_agent_ids: std::sync::Mutex<Vec<String>>,
 }
 
 impl Router {
@@ -94,6 +96,7 @@ impl Router {
             active_agent_handles: std::sync::Mutex::new(Vec::new()),
             active_agents_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             is_run_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            cancelled_agent_ids: std::sync::Mutex::new(Vec::new()),
         };
 
         // Spawn LiveConflictDetector if a WebSocket server is configured
@@ -163,6 +166,7 @@ impl Router {
                             Some("running") | Some("pending") | None
                         );
                         if is_active {
+                            self.cancelled_agent_ids.lock().unwrap().push(agent.id.clone());
                             self.mem_state.set_agent_state(rid, &agent.id, "crashed");
                             let _ = self.state_db.upsert_agent(
                                 rid,
@@ -219,6 +223,7 @@ impl Router {
                         );
                         if is_active {
                             active_agent_ids.push(agent.id.clone());
+                            self.cancelled_agent_ids.lock().unwrap().push(agent.id.clone());
                             self.mem_state.set_agent_state(rid, &agent.id, "crashed");
                             let _ = self.state_db.upsert_agent(
                                 rid,
@@ -254,9 +259,16 @@ impl Router {
         }
 
         // 3b. Final reconciliation: ALWAYS persist crashed state for agents that were active during cancellation
+        // (combining active_agent_ids and any recorded in cancelled_agent_ids from sync phase)
         // directly into StateDb (and MemState) to guarantee the persistent SQLite record is never overwritten by a late racing write.
         if let Some(ref rid) = run_id {
-            for agent_id in &active_agent_ids {
+            let mut ids_to_reconcile = active_agent_ids;
+            for id in self.cancelled_agent_ids.lock().unwrap().iter() {
+                if !ids_to_reconcile.contains(id) {
+                    ids_to_reconcile.push(id.clone());
+                }
+            }
+            for agent_id in &ids_to_reconcile {
                 self.mem_state.set_agent_state(rid, agent_id, "crashed");
                 let _ = self.state_db.upsert_agent(
                     rid,
@@ -463,6 +475,7 @@ impl Router {
         // Track the active run so a cancellation can finalize it.
         self.is_run_cancelled
             .store(false, std::sync::atomic::Ordering::SeqCst);
+        self.cancelled_agent_ids.lock().unwrap().clear();
         *self.current_run_id.lock().unwrap() = Some(run_id_str.clone());
         *self.current_worktrees.lock().unwrap() = Vec::new();
         self.active_agent_handles.lock().unwrap().clear();
