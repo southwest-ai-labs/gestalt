@@ -68,10 +68,8 @@ pub async fn finalize_active_task_runs(timeout: Option<Duration>) {
     // When drain is invoked, each entry calls `r.cancel_current_run()`, which persists terminal
     // crashed/cancelled states in SQLite immediately, waits up to 1.5s for agent tasks to drop,
     // reconciles any racing writes, and cleans up worktrees (up to 4s).
-    // Allow up to 8s (or total_timeout when larger), providing sufficient headroom so worktree
-    // cleanup is never prematurely interrupted.
-    let total_timeout = timeout.unwrap_or(Duration::from_secs(8));
-    let cancel_budget = total_timeout.max(Duration::from_secs(8));
+    // Bounded strictly by timeout (default 8s), ensuring shutdown always respects the configured deadline.
+    let cancel_budget = timeout.unwrap_or(Duration::from_secs(8));
 
     let cancel_all_fut = async {
         let mut join_set = tokio::task::JoinSet::new();
@@ -218,7 +216,6 @@ pub async fn serve_with_shutdown(
                     .await
             });
 
-            let mut drain_start: Option<std::time::Instant> = None;
             let select_res = tokio::select! {
                 res = &mut server_task => {
                     match res {
@@ -228,7 +225,6 @@ pub async fn serve_with_shutdown(
                 }
                 _ = wait => {
                     let _ = shutdown_tx.send(());
-                    drain_start = Some(std::time::Instant::now());
                     // Axum is now draining in the background. Enforce drain_deadline.
                     match tokio::time::timeout(drain_deadline, &mut server_task).await {
                         Ok(res) => {
@@ -251,13 +247,8 @@ pub async fn serve_with_shutdown(
                 }
             };
             tracing::info!("Event Bus + Task API stopped accepting connections (drained)");
-            // Calculate remaining drain budget for active task finalization so total shutdown
-            // cannot exceed GESTALT_SHUTDOWN_TIMEOUT_MS across both HTTP drain and task finalization.
-            let remaining_budget = match drain_start {
-                Some(start) => drain_deadline.saturating_sub(start.elapsed()),
-                None => drain_deadline,
-            };
-            finalize_active_task_runs(Some(remaining_budget)).await;
+            // Finalize active task runs with a clean dedicated shutdown allowance
+            finalize_active_task_runs(Some(drain_deadline)).await;
             select_res?;
         },
         None => {
