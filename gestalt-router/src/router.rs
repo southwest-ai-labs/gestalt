@@ -156,6 +156,9 @@ impl Router {
         let run_id = self.current_run_id.lock().unwrap().clone();
         let worktrees: Vec<std::path::PathBuf> = self.current_worktrees.lock().unwrap().clone();
 
+        // Track agents that were active (pending/running) at cancellation time
+        let mut active_agent_ids = Vec::new();
+
         // 2. Persist terminal cancelled status in StateDb and MemState IMMEDIATELY
         // to guarantee records are terminal even before waiting on tasks or worktree cleanup.
         if let Some(ref rid) = run_id {
@@ -169,6 +172,7 @@ impl Router {
                             Some("running") | Some("pending") | None
                         );
                         if is_active {
+                            active_agent_ids.push(agent.id.clone());
                             self.mem_state.set_agent_state(rid, &agent.id, "crashed");
                             let _ = self.state_db.upsert_agent(
                                 rid,
@@ -203,30 +207,22 @@ impl Router {
             tokio::time::sleep(std::time::Duration::from_millis(25)).await;
         }
 
-        // 3b. Final reconciliation: ensure no late agent task wrote a non-terminal or successful
-        // state during cancellation race before completing termination.
+        // 3b. Final reconciliation: ONLY reconcile agents that were active during cancellation
+        // to protect legitimate earlier terminal results (Success / NoChanges) from being overwritten.
         if let Some(ref rid) = run_id {
-            if let Ok(Some(run_rec)) = self.state_db.get_run(rid) {
-                if let Ok(spec) = serde_json::from_str::<RunSpec>(&run_rec.spec_json) {
-                    for agent in spec.agents {
-                        let current_state = self.mem_state.get_agent_state(rid, &agent.id);
-                        let is_non_terminal_or_racing = matches!(
-                            current_state.as_deref(),
-                            Some("running") | Some("pending") | Some("success") | Some("nochanges") | None
-                        );
-                        if is_non_terminal_or_racing {
-                            self.mem_state.set_agent_state(rid, &agent.id, "crashed");
-                            let _ = self.state_db.upsert_agent(
-                                rid,
-                                &agent.id,
-                                "crashed",
-                                None,
-                                Some("Run cancelled during execution"),
-                                0,
-                                "[]",
-                            );
-                        }
-                    }
+            for agent_id in &active_agent_ids {
+                let current_state = self.mem_state.get_agent_state(rid, agent_id);
+                if current_state.as_deref() != Some("crashed") {
+                    self.mem_state.set_agent_state(rid, agent_id, "crashed");
+                    let _ = self.state_db.upsert_agent(
+                        rid,
+                        agent_id,
+                        "crashed",
+                        None,
+                        Some("Run cancelled during execution"),
+                        0,
+                        "[]",
+                    );
                 }
             }
             let _ = self.state_db.complete_run(rid, "cancelled");

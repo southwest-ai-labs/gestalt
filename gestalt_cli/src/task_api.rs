@@ -60,10 +60,6 @@ pub async fn finalize_active_task_runs(timeout: Option<Duration>) {
     // Default to 8 seconds if not specified (covers the agent task drain + worktree cleanup with headroom),
     // clamped to any provided remaining shutdown budget.
     let total_timeout = timeout.unwrap_or(Duration::from_secs(8));
-    if total_timeout.is_zero() {
-        tracing::warn!("finalize_active_task_runs: shutdown budget exhausted; skipping active run drain");
-        return;
-    }
     let cancel_all_fut = async {
         let mut join_set = tokio::task::JoinSet::new();
         for entry in entries {
@@ -77,6 +73,14 @@ pub async fn finalize_active_task_runs(timeout: Option<Duration>) {
         }
         while join_set.join_next().await.is_some() {}
     };
+
+    if total_timeout.is_zero() {
+        tracing::warn!("finalize_active_task_runs: shutdown budget exhausted; running immediate cancellation without timeout wait");
+        // Even when the budget is zero, invoke cancel_all_fut synchronously with a minimal slice
+        // so that handles are aborted and terminal cancellation state is written.
+        let _ = tokio::time::timeout(Duration::from_millis(500), cancel_all_fut).await;
+        return;
+    }
 
     if tokio::time::timeout(total_timeout, cancel_all_fut)
         .await
@@ -210,7 +214,7 @@ pub async fn serve_with_shutdown(
                     .await
             });
 
-            let drain_start = std::time::Instant::now();
+            let mut drain_start: Option<std::time::Instant> = None;
             let select_res = tokio::select! {
                 res = &mut server_task => {
                     match res {
@@ -220,6 +224,7 @@ pub async fn serve_with_shutdown(
                 }
                 _ = wait => {
                     let _ = shutdown_tx.send(());
+                    drain_start = Some(std::time::Instant::now());
                     // Axum is now draining in the background. Enforce drain_deadline.
                     match tokio::time::timeout(drain_deadline, &mut server_task).await {
                         Ok(res) => {
@@ -244,7 +249,10 @@ pub async fn serve_with_shutdown(
             tracing::info!("Event Bus + Task API stopped accepting connections (drained)");
             // Calculate remaining drain budget for active task finalization so total shutdown
             // cannot exceed GESTALT_SHUTDOWN_TIMEOUT_MS across both HTTP drain and task finalization.
-            let remaining_budget = drain_deadline.saturating_sub(drain_start.elapsed());
+            let remaining_budget = match drain_start {
+                Some(start) => drain_deadline.saturating_sub(start.elapsed()),
+                None => drain_deadline,
+            };
             finalize_active_task_runs(Some(remaining_budget)).await;
             select_res?;
         },
