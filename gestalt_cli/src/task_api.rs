@@ -64,12 +64,20 @@ pub async fn finalize_active_task_runs(timeout: Option<Duration>) {
         entry.join_handle.abort();
     }
 
-    // 2. Finalize all active runs concurrently:
-    // When drain is invoked, each entry calls `r.cancel_current_run()`, which persists terminal
-    // crashed/cancelled states in SQLite immediately, waits up to 1.5s for agent tasks to drop,
-    // reconciles any racing writes, and cleans up worktrees (up to 4s).
-    // Bounded strictly by timeout (default 8s), ensuring shutdown always respects the configured deadline.
+    // 2. Immediate synchronous phase: mark cancellation and persist terminal crashed/cancelled states
+    // in StateDb (SQLite) and MemState immediately for every entry. This guarantees run states are terminal
+    // and cannot be lost even if the remaining timeout is zero or very short.
+    for entry in &entries {
+        entry.router.cancel_current_run_sync();
+    }
+
+    // 3. Graceful asynchronous phase: await in-flight task termination, perform racing-write reconciliation,
+    // and cleanup worktrees within the provided remaining shutdown budget.
     let cancel_budget = timeout.unwrap_or(Duration::from_secs(8));
+    if cancel_budget.is_zero() {
+        tracing::warn!("finalize_active_task_runs: shutdown budget exhausted; terminal state persisted, skipping task drain");
+        return;
+    }
 
     let cancel_all_fut = async {
         let mut join_set = tokio::task::JoinSet::new();
@@ -216,6 +224,7 @@ pub async fn serve_with_shutdown(
                     .await
             });
 
+            let mut drain_start: Option<std::time::Instant> = None;
             let select_res = tokio::select! {
                 res = &mut server_task => {
                     match res {
@@ -224,6 +233,7 @@ pub async fn serve_with_shutdown(
                     }
                 }
                 _ = wait => {
+                    drain_start = Some(std::time::Instant::now());
                     let _ = shutdown_tx.send(());
                     // Axum is now draining in the background. Enforce drain_deadline.
                     match tokio::time::timeout(drain_deadline, &mut server_task).await {
@@ -247,8 +257,13 @@ pub async fn serve_with_shutdown(
                 }
             };
             tracing::info!("Event Bus + Task API stopped accepting connections (drained)");
-            // Finalize active task runs with a clean dedicated shutdown allowance
-            finalize_active_task_runs(Some(drain_deadline)).await;
+            // Pass the remaining shutdown budget so total shutdown (HTTP drain + task finalization)
+            // shares and respects GESTALT_SHUTDOWN_TIMEOUT_MS.
+            let remaining_budget = match drain_start {
+                Some(start) => drain_deadline.saturating_sub(start.elapsed()),
+                None => drain_deadline,
+            };
+            finalize_active_task_runs(Some(remaining_budget)).await;
             select_res?;
         },
         None => {

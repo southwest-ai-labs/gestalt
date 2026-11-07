@@ -135,6 +135,52 @@ impl Router {
         self
     }
 
+    /// Synchronous cancellation marking and immediate terminal state persistence.
+    ///
+    /// Aborts in-flight agent tasks immediately and persists `crashed` / `cancelled`
+    /// status to StateDb and MemState without awaiting task termination or doing worktree I/O.
+    /// Safe to call on zero or exhausted timeout budgets to guarantee persistence.
+    pub fn cancel_current_run_sync(&self) {
+        self.is_run_cancelled
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        // Abort agent tasks immediately
+        {
+            let handles = self.active_agent_handles.lock().unwrap().clone();
+            for handle in handles {
+                handle.abort();
+            }
+        }
+
+        let run_id = self.current_run_id.lock().unwrap().clone();
+        if let Some(ref rid) = run_id {
+            if let Ok(Some(run_rec)) = self.state_db.get_run(rid) {
+                if let Ok(spec) = serde_json::from_str::<RunSpec>(&run_rec.spec_json) {
+                    for agent in spec.agents {
+                        let current_state = self.mem_state.get_agent_state(rid, &agent.id);
+                        let is_active = matches!(
+                            current_state.as_deref(),
+                            Some("running") | Some("pending") | None
+                        );
+                        if is_active {
+                            self.mem_state.set_agent_state(rid, &agent.id, "crashed");
+                            let _ = self.state_db.upsert_agent(
+                                rid,
+                                &agent.id,
+                                "crashed",
+                                None,
+                                Some("Run cancelled during execution"),
+                                0,
+                                "[]",
+                            );
+                        }
+                    }
+                }
+            }
+            let _ = self.state_db.complete_run(rid, "cancelled");
+        }
+    }
+
     /// Best-effort cancellation finalization for a run interrupted mid-flight.
     ///
     /// Removes any worktrees created for the current run and persists a
