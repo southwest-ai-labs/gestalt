@@ -8,6 +8,10 @@ description = "Agent Client Protocol (ACP) for Gestalt IDE integration"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 thiserror = "1.0"
+anyhow = "1.0"
+async-trait = "0.1"
+mcp-protocol-sdk = "0.5.1"
+gestalt_mcp = { path = "../gestalt_mcp" }
 tokio = { version = "1.0", features = ["full"] }
 tokio-util = "0.7"
 dashmap = "5.5"

@@ -1355,9 +1355,13 @@ dependencies = [
 name = "gestalt_acp"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "async-trait",
  "axum 0.7.9",
  "dashmap 5.5.3",
  "futures",
+ "gestalt_mcp",
+ "mcp-protocol-sdk",
  "reqwest",
  "serde",
  "serde_json",
