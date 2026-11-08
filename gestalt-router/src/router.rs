@@ -29,7 +29,7 @@ pub struct Router {
     pub state_db: Arc<StateDb>,
     pub mem_state: MemState,
     pub log: Option<Arc<dyn EventLog>>,
-    pub xavier: Option<XavierClient>,
+    pub xavier: std::sync::Mutex<Option<XavierClient>>,
     /// Local BM25 search engine for offline context retrieval.
     pub search_engine: Option<Arc<dyn LocalSearchEngine>>,
     /// Optional WebSocket server for broadcasting timeline events.
@@ -44,6 +44,18 @@ pub struct Router {
     pub max_retries: u32,
     /// TTL-cached provider health checks (CLI presence, response, API reach).
     pub health_cache: Arc<HealthCache>,
+    /// Run ID currently being executed (if any), for cancellation finalization.
+    pub current_run_id: std::sync::Mutex<Option<String>>,
+    /// Worktree paths created for the current run, for cancellation cleanup.
+    pub current_worktrees: std::sync::Mutex<Vec<std::path::PathBuf>>,
+    /// Active agent task handles for in-flight run cancellation and draining.
+    pub active_agent_handles: std::sync::Mutex<Vec<tokio::task::AbortHandle>>,
+    /// Counter of active in-flight agent tasks being executed.
+    pub active_agents_count: Arc<std::sync::atomic::AtomicUsize>,
+    /// Atomic flag indicating that the current run was cancelled.
+    pub is_run_cancelled: Arc<std::sync::atomic::AtomicBool>,
+    /// Agents that were actively running/pending when cancellation was triggered.
+    pub cancelled_agent_ids: std::sync::Mutex<Vec<String>>,
 }
 
 impl Router {
@@ -69,7 +81,7 @@ impl Router {
             state_db,
             mem_state,
             log,
-            xavier: None,
+            xavier: std::sync::Mutex::new(None),
             search_engine: None,
             ws_server,
             worktrees: Arc::new(WorktreeManager::new(std::path::PathBuf::from(
@@ -79,6 +91,12 @@ impl Router {
             timeout_secs: 300,
             max_retries: 3,
             health_cache: Arc::new(HealthCache::new()),
+            current_run_id: std::sync::Mutex::new(None),
+            current_worktrees: std::sync::Mutex::new(Vec::new()),
+            active_agent_handles: std::sync::Mutex::new(Vec::new()),
+            active_agents_count: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
+            is_run_cancelled: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            cancelled_agent_ids: std::sync::Mutex::new(Vec::new()),
         };
 
         // Spawn LiveConflictDetector if a WebSocket server is configured
@@ -92,9 +110,14 @@ impl Router {
     }
 
     /// Attach an optional Xavier client for memory/context integration.
-    pub fn with_xavier(mut self, xavier: XavierClient) -> Self {
-        self.xavier = Some(xavier);
+    pub fn with_xavier(self, xavier: XavierClient) -> Self {
+        *self.xavier.lock().unwrap() = Some(xavier);
         self
+    }
+
+    /// Mutably set the Xavier client on an existing router instance.
+    pub fn set_xavier(&self, xavier: XavierClient) {
+        *self.xavier.lock().unwrap() = Some(xavier);
     }
 
     /// Attach a local BM25 search engine for offline context retrieval.
@@ -113,6 +136,182 @@ impl Router {
     pub fn with_dry_run(mut self, dry_run: bool) -> Self {
         self.dry_run = dry_run;
         self
+    }
+
+    /// Synchronous cancellation marking and immediate terminal state persistence.
+    ///
+    /// Aborts in-flight agent tasks immediately and persists `crashed` / `cancelled`
+    /// status to StateDb and MemState without awaiting task termination or doing worktree I/O.
+    /// Safe to call on zero or exhausted timeout budgets to guarantee persistence.
+    pub fn cancel_current_run_sync(&self) {
+        self.is_run_cancelled
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        // Abort agent tasks immediately
+        {
+            let handles = self.active_agent_handles.lock().unwrap().clone();
+            for handle in handles {
+                handle.abort();
+            }
+        }
+
+        let run_id = self.current_run_id.lock().unwrap().clone();
+        if let Some(ref rid) = run_id {
+            if let Ok(Some(run_rec)) = self.state_db.get_run(rid) {
+                if let Ok(spec) = serde_json::from_str::<RunSpec>(&run_rec.spec_json) {
+                    for agent in spec.agents {
+                        let current_state = self.mem_state.get_agent_state(rid, &agent.id);
+                        let is_active = matches!(
+                            current_state.as_deref(),
+                            Some("running") | Some("pending") | None
+                        );
+                        if is_active {
+                            self.cancelled_agent_ids
+                                .lock()
+                                .unwrap()
+                                .push(agent.id.clone());
+                            self.mem_state.set_agent_state(rid, &agent.id, "crashed");
+                            let _ = self.state_db.upsert_agent(
+                                rid,
+                                &agent.id,
+                                "crashed",
+                                None,
+                                Some("Run cancelled during execution"),
+                                0,
+                                "[]",
+                            );
+                        }
+                    }
+                }
+            }
+            let _ = self.state_db.complete_run(rid, "cancelled");
+        }
+    }
+
+    /// Best-effort cancellation finalization for a run interrupted mid-flight.
+    ///
+    /// Removes any worktrees created for the current run and persists a
+    /// terminal `cancelled` status for the run record. Failures are logged
+    /// but never propagated, so shutdown cannot hang on this path.
+    pub async fn cancel_current_run(&self) {
+        // Mark run as cancelled immediately so any in-flight agent task aborts further work/state writes
+        self.is_run_cancelled
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+
+        // 1. Abort all in-flight agent tasks immediately so their subprocesses/threads terminate
+        {
+            let handles = self.active_agent_handles.lock().unwrap().clone();
+            for handle in handles {
+                handle.abort();
+            }
+        }
+
+        let run_id = self.current_run_id.lock().unwrap().clone();
+        let worktrees: Vec<std::path::PathBuf> = self.current_worktrees.lock().unwrap().clone();
+
+        // Track agents that were active (pending/running) at cancellation time
+        let mut active_agent_ids = Vec::new();
+
+        // 2. Persist terminal cancelled status in StateDb and MemState IMMEDIATELY
+        // to guarantee records are terminal even before waiting on tasks or worktree cleanup.
+        if let Some(ref rid) = run_id {
+            if let Ok(Some(run_rec)) = self.state_db.get_run(rid) {
+                if let Ok(spec) = serde_json::from_str::<RunSpec>(&run_rec.spec_json) {
+                    for agent in spec.agents {
+                        let current_state = self.mem_state.get_agent_state(rid, &agent.id);
+                        // Transition active/non-terminal agents (Pending / Running) to Crashed
+                        let is_active = matches!(
+                            current_state.as_deref(),
+                            Some("running") | Some("pending") | None
+                        );
+                        if is_active {
+                            active_agent_ids.push(agent.id.clone());
+                            self.cancelled_agent_ids
+                                .lock()
+                                .unwrap()
+                                .push(agent.id.clone());
+                            self.mem_state.set_agent_state(rid, &agent.id, "crashed");
+                            let _ = self.state_db.upsert_agent(
+                                rid,
+                                &agent.id,
+                                "crashed",
+                                None,
+                                Some("Run cancelled during execution"),
+                                0,
+                                "[]",
+                            );
+                        }
+                    }
+                }
+            }
+
+            if let Err(e) = self.state_db.complete_run(rid, "cancelled") {
+                tracing::warn!(
+                    "cancel_current_run: failed to persist cancelled status: {}",
+                    e
+                );
+            }
+        }
+
+        // 3. Wait up to 1.5 seconds for active agent tasks to completely stop executing and drop
+        let wait_start = std::time::Instant::now();
+        while self
+            .active_agents_count
+            .load(std::sync::atomic::Ordering::SeqCst)
+            > 0
+            && wait_start.elapsed() < std::time::Duration::from_millis(1500)
+        {
+            tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+        }
+
+        // 3b. Final reconciliation: ALWAYS persist crashed state for agents that were active during cancellation
+        // (combining active_agent_ids and any recorded in cancelled_agent_ids from sync phase)
+        // directly into StateDb (and MemState) to guarantee the persistent SQLite record is never overwritten by a late racing write.
+        if let Some(ref rid) = run_id {
+            let mut ids_to_reconcile = active_agent_ids;
+            for id in self.cancelled_agent_ids.lock().unwrap().iter() {
+                if !ids_to_reconcile.contains(id) {
+                    ids_to_reconcile.push(id.clone());
+                }
+            }
+            for agent_id in &ids_to_reconcile {
+                self.mem_state.set_agent_state(rid, agent_id, "crashed");
+                let _ = self.state_db.upsert_agent(
+                    rid,
+                    agent_id,
+                    "crashed",
+                    None,
+                    Some("Run cancelled during execution"),
+                    0,
+                    "[]",
+                );
+            }
+            let _ = self.state_db.complete_run(rid, "cancelled");
+        }
+
+        // 4. Bound cleanup to 4 seconds so a hanging git command cannot block shutdown forever
+        let cleanup_timeout = std::time::Duration::from_secs(4);
+        let cleanup_fut = async {
+            for wt in &worktrees {
+                if let Err(e) = self.worktrees.cleanup_worktree(wt).await {
+                    tracing::warn!("cancel_current_run: cleanup failed for {:?}: {}", wt, e);
+                }
+            }
+        };
+
+        if tokio::time::timeout(cleanup_timeout, cleanup_fut)
+            .await
+            .is_err()
+        {
+            tracing::warn!(
+                "cancel_current_run: worktree cleanup timed out after {:?}",
+                cleanup_timeout
+            );
+        }
+
+        *self.current_run_id.lock().unwrap() = None;
+        self.current_worktrees.lock().unwrap().clear();
+        self.active_agent_handles.lock().unwrap().clear();
     }
 
     /// Configure the maximum number of retry attempts for transient failures.
@@ -206,7 +405,8 @@ impl Router {
         }
 
         // Fall back to Xavier remote
-        if let Some(ref xavier) = self.xavier {
+        let xavier_opt = self.xavier.lock().unwrap().clone();
+        if let Some(ref xavier) = xavier_opt {
             let ctx = xavier.search_context(task, limit).await;
             if !ctx.is_empty() {
                 tracing::info!("Xavier context fetched for task: {} results", ctx.len());
@@ -246,7 +446,7 @@ impl Router {
     fn emit_bus_event(&self, ev: BusEvent) {
         // Persist to the shared timeline (dedup + sink happen here).
         let db = self.state_db.clone();
-        let xavier = self.xavier.clone();
+        let xavier = self.xavier.lock().unwrap().clone();
         tokio::spawn(async move {
             let sink = xavier.map(crate::xavier_sink::XavierEventSink::new);
             let _ = crate::event_bus::handle_event(&db, &ev, sink.as_ref()).await;
@@ -277,6 +477,14 @@ impl Router {
             .map_err(|e| {
                 RouterError::InvalidSpec(format!("Failed to create run in StateDb: {}", e))
             })?;
+
+        // Track the active run so a cancellation can finalize it.
+        self.is_run_cancelled
+            .store(false, std::sync::atomic::Ordering::SeqCst);
+        self.cancelled_agent_ids.lock().unwrap().clear();
+        *self.current_run_id.lock().unwrap() = Some(run_id_str.clone());
+        *self.current_worktrees.lock().unwrap() = Vec::new();
+        self.active_agent_handles.lock().unwrap().clear();
 
         // 3. PRE: Fetch relevant context from local BM25 (offline) or Xavier (remote)
         let search_context = self.fetch_context(&spec.task, 5).await;
@@ -324,6 +532,12 @@ impl Router {
         let mut wt_paths = HashMap::new();
 
         for agent in &spec.agents {
+            let planned_wt = self
+                .worktrees
+                .base_dir
+                .join(format!("{}-{}", run_id, agent.id));
+            self.current_worktrees.lock().unwrap().push(planned_wt);
+
             match self
                 .worktrees
                 .create_worktree(run_id, &agent.id, &base_sha)
@@ -371,8 +585,33 @@ impl Router {
             let mem_state = self.mem_state.clone();
             let log_opt = self.log.clone();
             let ws_server = self.ws_server.clone();
+            let count_tracker = self.active_agents_count.clone();
+            let is_cancelled = self.is_run_cancelled.clone();
 
-            join_set.spawn(async move {
+            count_tracker.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            struct TaskGuard(Arc<std::sync::atomic::AtomicUsize>);
+            impl Drop for TaskGuard {
+                fn drop(&mut self) {
+                    self.0.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
+                }
+            }
+            let task_guard = TaskGuard(count_tracker);
+
+            let handle = join_set.spawn(async move {
+                let _guard = task_guard;
+                if is_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                    return Ok(AgentResult {
+                        agent_id,
+                        state: AgentState::Crashed,
+                        output: None,
+                        error: Some("Run cancelled before agent dispatch".to_string()),
+                        branch: None,
+                        duration_ms: 0,
+                        changed_files: Vec::new(),
+                        run_id: Some(run_id_clone),
+                        worktree_path: Some(wt_path.to_string_lossy().to_string()),
+                    });
+                }
                 // Set agent state to Running in MemState
                 mem_state.set_agent_state(
                     &run_id_str_clone,
@@ -448,6 +687,22 @@ impl Router {
                 )
                 .await?;
 
+                // Guard: If run was cancelled while agent executed, do not run checkpoint
+                // on potentially deleted/locked worktrees, and do not overwrite terminal state.
+                if is_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                    return Ok(AgentResult {
+                        agent_id,
+                        state: AgentState::Crashed,
+                        output: run_result.output,
+                        error: Some("Run cancelled during execution".to_string()),
+                        branch: run_result.branch,
+                        duration_ms: run_result.duration_ms,
+                        changed_files: Vec::new(),
+                        run_id: run_result.run_id,
+                        worktree_path: run_result.worktree_path,
+                    });
+                }
+
                 // Run Checkpoint
                 let checkpoint_res = crate::checkpoint::run_checkpoint(&wt_path, &agent_id);
 
@@ -472,6 +727,11 @@ impl Router {
                 };
 
                 run_result.state = final_state.clone();
+
+                // Guard again before mutating MemState and StateDb
+                if is_cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                    return Ok(run_result);
+                }
 
                 // Update final state in MemState
                 mem_state.set_agent_state(&run_id_str_clone, &agent_id, &final_state.to_string());
@@ -511,6 +771,7 @@ impl Router {
 
                 Ok::<AgentResult, RouterError>(run_result)
             });
+            self.active_agent_handles.lock().unwrap().push(handle);
         }
 
         // Wait for all agents to finish
@@ -583,6 +844,15 @@ impl Router {
             .collect();
 
         if !branches_to_merge.is_empty() {
+            let integrate_wt = self
+                .worktrees
+                .base_dir
+                .join(format!("{}-{}", run_id, "_integrate"));
+            self.current_worktrees
+                .lock()
+                .unwrap()
+                .push(integrate_wt.clone());
+
             match self
                 .worktrees
                 .create_worktree(run_id, "_integrate", &base_sha)
@@ -682,6 +952,11 @@ impl Router {
                 RouterError::InvalidSpec(format!("Failed to complete run in StateDb: {}", e))
             })?;
 
+        // Clear cancellation tracking on successful completion.
+        *self.current_run_id.lock().unwrap() = None;
+        self.current_worktrees.lock().unwrap().clear();
+        self.active_agent_handles.lock().unwrap().clear();
+
         // 11. POST: Archive run results as memory in Xavier
         let events_path = self
             .worktrees
@@ -720,7 +995,8 @@ impl Router {
         }
 
         // 11b. Archive in Xavier (if available)
-        if let Some(ref xavier) = self.xavier {
+        let xavier_opt = self.xavier.lock().unwrap().clone();
+        if let Some(ref xavier) = xavier_opt {
             let metadata = serde_json::json!({
                 "run_id": run_id.to_string(),
                 "task": spec.task,

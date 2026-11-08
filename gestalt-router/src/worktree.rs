@@ -235,14 +235,14 @@ impl WorktreeManager {
         let mut delay = std::time::Duration::from_millis(50);
 
         loop {
-            let output = tokio::process::Command::new("git")
-                .current_dir(repo_path)
-                .args(args)
-                .output()
-                .await
-                .map_err(|e| {
-                    RouterError::GitError(format!("Failed to execute git command: {e}"))
-                })?;
+            let mut cmd = tokio::process::Command::new("git");
+            cmd.current_dir(repo_path);
+            cmd.args(args);
+            cmd.kill_on_drop(true);
+
+            let output = cmd.output().await.map_err(|e| {
+                RouterError::GitError(format!("Failed to execute git command: {e}"))
+            })?;
 
             if output.status.success() {
                 return Ok(String::from_utf8_lossy(&output.stdout).into_owned());

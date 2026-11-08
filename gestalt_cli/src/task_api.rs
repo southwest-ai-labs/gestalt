@@ -1,5 +1,12 @@
 use crate::bus::BusState;
-use axum::{extract::State, http::StatusCode, response::IntoResponse, routing::post, Json, Router};
+use axum::{
+    extract::{Request, State},
+    http::StatusCode,
+    middleware::{self, Next},
+    response::IntoResponse,
+    routing::post,
+    Json, Router,
+};
 use gestalt_core::application::agent::registry::{AgentEntry, AgentRegistry};
 use gestalt_core::application::agent::xavier::XavierClient;
 use gestalt_router::{
@@ -9,8 +16,94 @@ use gestalt_router::{
     run::{AgentSpec, RunSpec},
 };
 use gestalt_state::memstate::MemState;
+use std::collections::HashMap;
 use std::sync::{Arc, OnceLock};
 use std::time::Duration;
+use tokio_util::sync::CancellationToken;
+
+/// Drain timeout honoured by the HTTP server, sourced from
+/// `GESTALT_SHUTDOWN_TIMEOUT_MS` (default 5s), clamped to 10 minutes.
+fn drain_timeout_from_env() -> Duration {
+    std::env::var("GESTALT_SHUTDOWN_TIMEOUT_MS")
+        .ok()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .map(|ms| Duration::from_millis(ms.min(600_000)))
+        .unwrap_or(Duration::from_secs(5))
+}
+
+struct ActiveRunEntry {
+    router: Arc<GestaltRouter>,
+    join_handle: tokio::task::JoinHandle<()>,
+}
+
+static ACTIVE_RUNS: OnceLock<std::sync::Mutex<HashMap<usize, ActiveRunEntry>>> = OnceLock::new();
+static NEXT_RUN_ID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(1);
+
+fn active_runs() -> &'static std::sync::Mutex<HashMap<usize, ActiveRunEntry>> {
+    ACTIVE_RUNS.get_or_init(|| std::sync::Mutex::new(HashMap::new()))
+}
+
+/// Finalize and cancel all in-flight Task API orchestrations on server shutdown concurrently,
+/// bounded by a given timeout deadline to ensure bounded overall shutdown.
+pub async fn finalize_active_task_runs(timeout: Option<Duration>) {
+    let entries: Vec<ActiveRunEntry> = {
+        let mut guard = active_runs().lock().unwrap();
+        guard.drain().map(|(_, v)| v).collect()
+    };
+
+    if entries.is_empty() {
+        return;
+    }
+
+    // Finalize all active runs concurrently: abort the outer task, await its termination,
+    // and then cancel the router so all state records and worktrees are cleanly finalized.
+    // Default to 8 seconds if not specified (covers the agent task drain + worktree cleanup with headroom),
+    // clamped to any provided remaining shutdown budget.
+    let sync_start = std::time::Instant::now();
+    // 1. Immediately abort the outer orchestration join handles so they stop dispatching new work
+    for entry in &entries {
+        entry.join_handle.abort();
+    }
+
+    // 2. Immediate synchronous phase: mark cancellation and persist terminal crashed/cancelled states
+    // in StateDb (SQLite) and MemState immediately for every entry. This guarantees run states are terminal
+    // and cannot be lost even if the remaining timeout is zero or very short.
+    for entry in &entries {
+        entry.router.cancel_current_run_sync();
+    }
+
+    // 3. Graceful asynchronous phase: await in-flight task termination, perform racing-write reconciliation,
+    // and cleanup worktrees within the provided remaining shutdown budget (discounting the time taken by sync persistence).
+    let raw_budget = timeout.unwrap_or(Duration::from_secs(8));
+    let cancel_budget = raw_budget.saturating_sub(sync_start.elapsed());
+    if cancel_budget.is_zero() {
+        tracing::warn!("finalize_active_task_runs: shutdown budget exhausted; terminal state persisted, skipping task drain");
+        return;
+    }
+
+    let cancel_all_fut = async {
+        let mut join_set = tokio::task::JoinSet::new();
+        for entry in entries {
+            let r = entry.router.clone();
+            let handle = entry.join_handle;
+            join_set.spawn(async move {
+                let _ = handle.await;
+                r.cancel_current_run().await;
+            });
+        }
+        while join_set.join_next().await.is_some() {}
+    };
+
+    if tokio::time::timeout(cancel_budget, cancel_all_fut)
+        .await
+        .is_err()
+    {
+        tracing::warn!(
+            "finalize_active_task_runs: concurrent cancellation timed out after {:?}",
+            cancel_budget
+        );
+    }
+}
 
 static GLOBAL_MEM_STATE: OnceLock<MemState> = OnceLock::new();
 
@@ -83,7 +176,29 @@ pub async fn serve_with_shutdown(
         db: db.clone(),
         sink,
     };
-    let app = crate::bus::build_router(bus_state.clone()).merge(router().with_state(bus_state));
+
+    let cancel_token = CancellationToken::new();
+    let token_clone = cancel_token.clone();
+
+    // Wrap app in a cancellation middleware so in-flight requests abort if drain expires
+    let app = crate::bus::build_router(bus_state.clone())
+        .merge(router().with_state(bus_state))
+        .layer(middleware::from_fn(move |req: Request, next: Next| {
+            let token = token_clone.clone();
+            async move {
+                tokio::select! {
+                    biased;
+                    _ = token.cancelled() => {
+                        (
+                            StatusCode::SERVICE_UNAVAILABLE,
+                            "Server shutdown drain timeout expired",
+                        )
+                            .into_response()
+                    }
+                    res = next.run(req) => res,
+                }
+            }
+        }));
 
     let addr = format!("{}:{}", host, port);
 
@@ -98,10 +213,60 @@ pub async fn serve_with_shutdown(
 
     match shutdown {
         Some(wait) => {
-            axum::serve(listener, app)
-                .with_graceful_shutdown(wait)
-                .await?;
+            // Signal graceful shutdown when `wait` resolves, then bound the remaining drain
+            // to GESTALT_SHUTDOWN_TIMEOUT_MS so a stalled request cannot hang indefinitely.
+            let drain_deadline = drain_timeout_from_env();
+            let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
+
+            let mut server_task = tokio::spawn(async move {
+                axum::serve(listener, app)
+                    .with_graceful_shutdown(async move {
+                        let _ = shutdown_rx.await;
+                    })
+                    .await
+            });
+
+            let mut drain_start: Option<std::time::Instant> = None;
+            let select_res = tokio::select! {
+                res = &mut server_task => {
+                    match res {
+                        Ok(inner) => inner.map_err(|e| Box::new(e) as Box<dyn std::error::Error>),
+                        Err(e) => Err(Box::new(e) as Box<dyn std::error::Error>),
+                    }
+                }
+                _ = wait => {
+                    drain_start = Some(std::time::Instant::now());
+                    let _ = shutdown_tx.send(());
+                    // Axum is now draining in the background. Enforce drain_deadline.
+                    match tokio::time::timeout(drain_deadline, &mut server_task).await {
+                        Ok(res) => {
+                            match res {
+                                Ok(inner) => inner.map_err(|e| Box::new(e) as Box<dyn std::error::Error>),
+                                Err(e) => Err(Box::new(e) as Box<dyn std::error::Error>),
+                            }
+                        }
+                        Err(_) => {
+                            tracing::warn!(
+                                "Event Bus + Task API graceful drain exceeded {:?}; abandoning",
+                                drain_deadline
+                            );
+                            cancel_token.cancel();
+                            server_task.abort();
+                            let _ = server_task.await;
+                            Ok(())
+                        }
+                    }
+                }
+            };
             tracing::info!("Event Bus + Task API stopped accepting connections (drained)");
+            // Pass the remaining shutdown budget so total shutdown (HTTP drain + task finalization)
+            // shares and respects GESTALT_SHUTDOWN_TIMEOUT_MS.
+            let remaining_budget = match drain_start {
+                Some(start) => drain_deadline.saturating_sub(start.elapsed()),
+                None => drain_deadline,
+            };
+            finalize_active_task_runs(Some(remaining_budget)).await;
+            select_res?;
         },
         None => {
             axum::serve(listener, app).await?;
@@ -116,8 +281,8 @@ async fn handle_task_http(
     State(bus_state): State<BusState>,
     Json(req): Json<TaskRequest>,
 ) -> impl IntoResponse {
-    let registry_path = "agent-registry.toml";
-    let registry = match AgentRegistry::load(registry_path) {
+    let registry_path = AgentRegistry::resolve_path("agent-registry.toml");
+    let registry = match AgentRegistry::load(&registry_path) {
         Ok(r) => r,
         Err(e) => {
             return (
@@ -216,17 +381,35 @@ async fn handle_task_http(
     };
 
     let db = bus_state.db.clone();
-    let xavier_client = XavierClient::from_env();
+    let runner = SubprocessRunner::new(Duration::from_secs(300));
+    let router_inst = GestaltRouter::new(None, Arc::new(runner), db, get_mem_state(), None, None);
+    let router_arc = Arc::new(router_inst);
+    let run_key = NEXT_RUN_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-    tokio::spawn(async move {
-        let runner = SubprocessRunner::new(Duration::from_secs(300));
-        let mut gestalt_router =
-            GestaltRouter::new(None, Arc::new(runner), db, get_mem_state(), None, None);
+    // Use a notify channel so the task does not execute or remove its entry before registration completes
+    let (start_tx, start_rx) = tokio::sync::oneshot::channel::<()>();
+
+    let router_for_spawn = router_arc.clone();
+    let handle = tokio::spawn(async move {
+        let _ = start_rx.await;
+        let xavier_client = XavierClient::from_env();
         if xavier_client.is_available().await {
-            gestalt_router = gestalt_router.with_xavier(xavier_client);
+            router_for_spawn.set_xavier(xavier_client);
         }
-        let _ = gestalt_router.execute(run_spec).await;
+        let _ = router_for_spawn.execute(run_spec).await;
+        active_runs().lock().unwrap().remove(&run_key);
     });
+
+    {
+        active_runs().lock().unwrap().insert(
+            run_key,
+            ActiveRunEntry {
+                router: router_arc,
+                join_handle: handle,
+            },
+        );
+    }
+    let _ = start_tx.send(());
 
     (
         StatusCode::OK,
