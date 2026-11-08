@@ -3,6 +3,7 @@
 // expansion is outside our control, so allow it crate-wide.
 #![allow(clippy::double_must_use)]
 
+pub mod consensus;
 pub mod agent;
 pub mod checkpoint;
 pub mod doctor;
