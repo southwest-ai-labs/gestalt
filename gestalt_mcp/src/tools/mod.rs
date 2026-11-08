@@ -16,6 +16,8 @@ use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 pub mod agent_status;
+pub mod run_stream;
+use crate::tools::run_stream::GestaltRunStreamHandler;
 pub mod bus_query;
 use crate::tools::agent_status::GestaltAgentStatusHandler;
 use crate::tools::bus_query::BusQueryHandler;
@@ -1116,6 +1118,24 @@ pub async fn register_standard_tools(server: &McpServer) -> anyhow::Result<()> {
             GestaltAgentStatusHandler,
         )
         .await?;
+
+    // gestalt_run_stream
+    server
+        .add_tool(
+            "gestalt_run_stream".to_string(),
+            Some("Stream execution output for a Gestalt command in real-time".to_string()),
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "command": { "type": "string", "description": "Command to execute (e.g. 'gestalt chain run')" }
+                },
+                "required": ["command"]
+            }),
+            GestaltRunStreamHandler,
+        )
+        .await?;
+
+
 
     Ok(())
 }

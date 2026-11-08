@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use mcp_protocol_sdk::core::error::McpResult;
+use mcp_protocol_sdk::McpResult;
 use mcp_protocol_sdk::core::tool::ToolHandler;
-use mcp_protocol_sdk::protocol::types::{ContentBlock, ToolResult};
+use mcp_protocol_sdk::protocol::types::{ContentBlock, CallToolResult};
 use serde_json::{json, Value};
 
-fn ok_result(text: String) -> ToolResult {
-    ToolResult {
+fn ok_result(text: String) -> CallToolResult {
+    CallToolResult {
         content: vec![ContentBlock::text(text)],
         is_error: Some(false),
         structured_content: None,
@@ -19,7 +19,7 @@ pub struct BusQueryHandler;
 
 #[async_trait]
 impl ToolHandler for BusQueryHandler {
-    async fn call(&self, arguments: HashMap<String, Value>) -> McpResult<ToolResult> {
+    async fn call(&self, arguments: HashMap<String, Value>) -> McpResult<CallToolResult> {
         let limit = arguments
             .get("limit")
             .and_then(|v| v.as_u64())
