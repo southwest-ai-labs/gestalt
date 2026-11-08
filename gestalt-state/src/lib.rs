@@ -9,6 +9,7 @@ pub mod schema;
 pub mod statedb;
 pub mod transaction;
 pub mod virtual_fs;
+pub mod checkpoint;
 
 pub use memstate::MemState;
 pub use schema::{AgentRecord, AgentState, FileLock, RunRecord, TimelineEvent};
