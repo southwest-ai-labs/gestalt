@@ -237,45 +237,72 @@ def run():
     updated_any = False
     for tid, sid, s, item in completed_sessions:
         outputs = s.get("outputs", [])
+        patch = None
+        pr_num = None
         for out in outputs:
             pr = out.get("pullRequest", {})
-            pr_num = pr.get("number")
-            patch = out.get("changeSet", {}).get("gitPatch", {}).get("unidiffPatch")
-            if pr_num:
-                log(f"Detectado PR #{pr_num} para {tid}. Verificando...")
-                try:
-                    subprocess.run(["gh", "pr", "merge", str(pr_num), "-R", "southwest-ai-labs/gestalt", "--rebase", "--auto"], check=True)
-                    log(f"✅ PR #{pr_num} configurado para auto-merge!")
+            if pr.get("number"):
+                pr_num = pr.get("number")
+            p = out.get("changeSet", {}).get("gitPatch", {}).get("unidiffPatch")
+            if p:
+                patch = p
+
+        # Fallback a activities si outputs no contiene patch ni PR
+        if not pr_num and not patch:
+            try:
+                act_url = f"{JULES_API_BASE}/sessions/{sid}/activities"
+                areq = urllib.request.Request(act_url, headers={"X-Goog-Api-Key": key_a})
+                with urllib.request.urlopen(areq, timeout=10) as aresp:
+                    acts = json.loads(aresp.read().decode()).get("activities", [])
+                    for a in acts:
+                        for art in a.get("artifacts", []):
+                            p = art.get("changeSet", {}).get("gitPatch", {}).get("unidiffPatch")
+                            if p:
+                                patch = p
+            except Exception as e:
+                log(f"Aviso consultando activities de {sid}: {e}")
+
+        if pr_num:
+            log(f"Detectado PR #{pr_num} para {tid}. Verificando...")
+            try:
+                subprocess.run(["gh", "pr", "merge", str(pr_num), "-R", "southwest-ai-labs/gestalt", "--rebase", "--auto"], check=True)
+                log(f"✅ PR #{pr_num} configurado para auto-merge!")
+                item["integrated"] = True
+                updated_any = True
+            except Exception as e:
+                log(f"Aviso en merge de PR #{pr_num}: {e}")
+        elif patch:
+            log(f"Detectado gitPatch para {tid}. Aplicando...")
+            try:
+                patch_proc = subprocess.run(["git", "apply", "--ignore-whitespace", "-"], cwd=GESTALT_DIR, input=patch, text=True)
+                if patch_proc.returncode != 0:
+                    patch_proc = subprocess.run(["git", "apply", "--3way", "--ignore-whitespace", "-"], cwd=GESTALT_DIR, input=patch, text=True)
+                if patch_proc.returncode == 0 and check_compilation():
+                    subprocess.run(["git", "add", "-A"], cwd=GESTALT_DIR, check=True)
+                    subprocess.run(["git", "commit", "-m", f"feat(wave): integrate {tid} patch from Jules session {sid}"], cwd=GESTALT_DIR, check=True)
+                    subprocess.run(["git", "push", "origin", "main"], cwd=GESTALT_DIR, check=True)
+                    log(f"✅ Patch para {tid} integrado y pusheado a main!")
                     item["integrated"] = True
                     updated_any = True
-                except Exception as e:
-                    log(f"Aviso en merge de PR #{pr_num}: {e}")
-            elif patch:
-                log(f"Detectado gitPatch para {tid}. Aplicando...")
-                try:
-                    patch_proc = subprocess.run(["git", "apply", "--ignore-whitespace", "-"], cwd=GESTALT_DIR, input=patch, text=True)
-                    if patch_proc.returncode != 0:
-                        patch_proc = subprocess.run(["git", "apply", "--3way", "--ignore-whitespace", "-"], cwd=GESTALT_DIR, input=patch, text=True)
-                    if patch_proc.returncode == 0 and check_compilation():
-                        subprocess.run(["git", "add", "-A"], cwd=GESTALT_DIR, check=True)
-                        subprocess.run(["git", "commit", "-m", f"feat(wave): integrate {tid} patch from Jules session {sid}"], cwd=GESTALT_DIR, check=True)
-                        subprocess.run(["git", "push", "origin", "main"], cwd=GESTALT_DIR, check=True)
-                        log(f"✅ Patch para {tid} integrado y pusheado a main!")
-                        item["integrated"] = True
-                        updated_any = True
-                        # Archive session to free slot immediately
-                        try:
-                            areq = urllib.request.Request(
-                                f"{JULES_API_BASE}/sessions/{sid}:archive",
-                                data=b"{}",
-                                headers={"Content-Type": "application/json", "X-Goog-Api-Key": key_a}
-                            )
-                            with urllib.request.urlopen(areq, timeout=10) as aresp:
-                                log(f"✅ Sesión {sid} archivada en Jules.")
-                        except Exception as e:
-                            log(f"Aviso archivando sesión {sid}: {e}")
-                except Exception as e:
-                    log(f"Aviso aplicando patch para {tid}: {e}")
+                    # Archive session to free slot immediately
+                    try:
+                        areq = urllib.request.Request(
+                            f"{JULES_API_BASE}/sessions/{sid}:archive",
+                            data=b"{}",
+                            headers={"Content-Type": "application/json", "X-Goog-Api-Key": key_a}
+                        )
+                        with urllib.request.urlopen(areq, timeout=10) as aresp:
+                            log(f"✅ Sesión {sid} archivada en Jules.")
+                    except Exception as e:
+                        log(f"Aviso archivando sesión {sid}: {e}")
+                else:
+                    log(f"❌ Falló aplicación o compilación para {tid}. Limpiando working tree...")
+                    subprocess.run(["git", "checkout", "--", "."], cwd=GESTALT_DIR)
+                    subprocess.run(["git", "clean", "-fd"], cwd=GESTALT_DIR)
+            except Exception as e:
+                log(f"Aviso aplicando patch para {tid}: {e}")
+                subprocess.run(["git", "checkout", "--", "."], cwd=GESTALT_DIR)
+                subprocess.run(["git", "clean", "-fd"], cwd=GESTALT_DIR)
 
     if updated_any:
         try:
