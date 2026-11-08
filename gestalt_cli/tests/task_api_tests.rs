@@ -15,6 +15,9 @@ pub mod bus;
 #[path = "../src/task_api.rs"]
 pub mod task_api;
 
+#[path = "../src/xavier_plugin/mod.rs"]
+pub mod xavier_plugin;
+
 use axum::{
     body::Body,
     http::{Request, StatusCode},

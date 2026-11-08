@@ -15,6 +15,7 @@ mod observe;
 mod repl;
 mod shutdown;
 pub mod task_api;
+pub mod xavier_plugin;
 
 use crate::config::CliConfig;
 use crate::repl::{EchoHandler, InteractiveRepl};

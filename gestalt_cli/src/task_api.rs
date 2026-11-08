@@ -120,7 +120,9 @@ pub struct TaskRequest {
 
 /// Router for the declarative task api.
 pub fn router() -> Router<BusState> {
-    Router::new().route("/api/task", post(handle_task_http))
+    Router::new()
+        .route("/api/task", post(handle_task_http))
+        .merge(crate::xavier_plugin::router())
 }
 
 /// Future that resolves when the process should stop accepting connections.
