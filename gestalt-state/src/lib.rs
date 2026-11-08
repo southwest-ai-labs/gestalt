@@ -13,3 +13,4 @@ pub use memstate::MemState;
 pub use schema::{AgentRecord, AgentState, FileLock, RunRecord, TimelineEvent};
 pub use statedb::{DbMetrics, StateDb, TransactionalStateDB, TransactionalStateDb};
 pub use virtual_fs::StateDbVfs;
+pub mod retention;
