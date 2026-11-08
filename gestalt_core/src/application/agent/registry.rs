@@ -281,10 +281,7 @@ impl AgentRegistry {
         }
 
         // Priority 2c: Explicit fallback to absolute path
-        let explicit_fallback = PathBuf::from(format!(
-            "apps/gestalt/{}",
-            file_name
-        ));
+        let explicit_fallback = PathBuf::from(format!("apps/gestalt/{}", file_name));
         if explicit_fallback.exists() {
             return explicit_fallback;
         }
