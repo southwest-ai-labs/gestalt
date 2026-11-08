@@ -7,6 +7,7 @@
 pub mod memstate;
 pub mod schema;
 pub mod statedb;
+pub mod transaction;
 pub mod virtual_fs;
 
 pub use memstate::MemState;
