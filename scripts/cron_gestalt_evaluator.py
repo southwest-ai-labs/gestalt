@@ -311,11 +311,11 @@ def run():
                         log(f"Aviso archivando sesión {sid}: {e}")
                 else:
                     log(f"❌ Falló aplicación o compilación para {tid}. Limpiando working tree...")
-                    subprocess.run(["git", "checkout", "--", "."], cwd=GESTALT_DIR)
+                    subprocess.run(["git", "reset", "--hard", "HEAD"], cwd=GESTALT_DIR)
                     subprocess.run(["git", "clean", "-fd"], cwd=GESTALT_DIR)
             except Exception as e:
                 log(f"Aviso aplicando patch para {tid}: {e}")
-                subprocess.run(["git", "checkout", "--", "."], cwd=GESTALT_DIR)
+                subprocess.run(["git", "reset", "--hard", "HEAD"], cwd=GESTALT_DIR)
                 subprocess.run(["git", "clean", "-fd"], cwd=GESTALT_DIR)
 
     if updated_any:
