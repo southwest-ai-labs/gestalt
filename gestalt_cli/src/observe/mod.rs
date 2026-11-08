@@ -2,6 +2,7 @@
 
 pub mod artifact_ingest;
 pub mod inject;
+pub mod injectors;
 pub mod orca_bridge;
 pub mod proc_monitor;
 
