@@ -191,6 +191,8 @@ def run():
     feedback_sessions = []
 
     for item in tracked_sessions:
+        if item.get("integrated"):
+            continue
         sid = item.get("session_id")
         tid = item.get("task_id", sid)
         url = f"{JULES_API_BASE}/sessions/{sid}"
@@ -200,18 +202,22 @@ def run():
                 s = json.loads(resp.read().decode())
                 st = s.get("state")
                 if st in ("IN_PROGRESS", "QUEUED"):
-                    active_sessions.append((tid, sid, s))
+                    active_sessions.append((tid, sid, s, item))
                 elif st == "AWAITING_USER_FEEDBACK":
-                    feedback_sessions.append((tid, sid, s))
+                    feedback_sessions.append((tid, sid, s, item))
                 elif st == "COMPLETED":
-                    completed_sessions.append((tid, sid, s))
+                    completed_sessions.append((tid, sid, s, item))
         except Exception as e:
             log(f"Error consultando sesión {sid}: {e}")
 
-    log(f"Estado ola Gestalt: Activas={len(active_sessions)}, AwaitingFeedback={len(feedback_sessions)}, Completadas={len(completed_sessions)}")
+    total_tracked = len(tracked_sessions)
+    total_integrated = sum(1 for s in tracked_sessions if s.get("integrated"))
+    completion_pct = round((total_integrated / total_tracked) * 100, 1) if total_tracked > 0 else 0.0
+
+    log(f"Estado ola Gestalt: Integradas={total_integrated}/{total_tracked} ({completion_pct}%), Activas={len(active_sessions)}, AwaitingFeedback={len(feedback_sessions)}, PendientesDeMerge={len(completed_sessions)}")
 
     # Auto-desbloqueo de sesiones AWAITING_USER_FEEDBACK
-    for tid, sid, s in feedback_sessions:
+    for tid, sid, s, item in feedback_sessions:
         log(f"Desbloqueando sesión {tid} ({sid}) con confirmación de continuación...")
         try:
             unblock_payload = {
@@ -228,7 +234,8 @@ def run():
             log(f"Aviso desbloqueando {sid}: {e}")
 
     # Integración automática de sesiones COMPLETED
-    for tid, sid, s in completed_sessions:
+    updated_any = False
+    for tid, sid, s, item in completed_sessions:
         outputs = s.get("outputs", [])
         for out in outputs:
             pr = out.get("pullRequest", {})
@@ -239,19 +246,43 @@ def run():
                 try:
                     subprocess.run(["gh", "pr", "merge", str(pr_num), "-R", "southwest-ai-labs/gestalt", "--rebase", "--auto"], check=True)
                     log(f"✅ PR #{pr_num} configurado para auto-merge!")
+                    item["integrated"] = True
+                    updated_any = True
                 except Exception as e:
                     log(f"Aviso en merge de PR #{pr_num}: {e}")
             elif patch:
                 log(f"Detectado gitPatch para {tid}. Aplicando...")
                 try:
                     patch_proc = subprocess.run(["git", "apply", "--ignore-whitespace", "-"], cwd=GESTALT_DIR, input=patch, text=True)
+                    if patch_proc.returncode != 0:
+                        patch_proc = subprocess.run(["git", "apply", "--3way", "--ignore-whitespace", "-"], cwd=GESTALT_DIR, input=patch, text=True)
                     if patch_proc.returncode == 0 and check_compilation():
                         subprocess.run(["git", "add", "-A"], cwd=GESTALT_DIR, check=True)
                         subprocess.run(["git", "commit", "-m", f"feat(wave): integrate {tid} patch from Jules session {sid}"], cwd=GESTALT_DIR, check=True)
                         subprocess.run(["git", "push", "origin", "main"], cwd=GESTALT_DIR, check=True)
                         log(f"✅ Patch para {tid} integrado y pusheado a main!")
+                        item["integrated"] = True
+                        updated_any = True
+                        # Archive session to free slot immediately
+                        try:
+                            areq = urllib.request.Request(
+                                f"{JULES_API_BASE}/sessions/{sid}:archive",
+                                data=b"{}",
+                                headers={"Content-Type": "application/json", "X-Goog-Api-Key": key_a}
+                            )
+                            with urllib.request.urlopen(areq, timeout=10) as aresp:
+                                log(f"✅ Sesión {sid} archivada en Jules.")
+                        except Exception as e:
+                            log(f"Aviso archivando sesión {sid}: {e}")
                 except Exception as e:
                     log(f"Aviso aplicando patch para {tid}: {e}")
+
+    if updated_any:
+        try:
+            wave_file.write_text(json.dumps(tracked_sessions, indent=2))
+            log("💾 Archivo dispatched_sessions.json actualizado.")
+        except Exception as e:
+            log(f"Aviso guardando wave_file: {e}")
 
     # 4. Si todas las sesiones de la ola están completadas, avanzar roadmap
     if len(active_sessions) == 0 and len(feedback_sessions) == 0 and len(tracked_sessions) > 0:
