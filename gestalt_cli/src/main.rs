@@ -467,6 +467,9 @@ enum Commands {
 
     /// Observe active daemon for discovering agents, injecting hooks, and tracking artifacts
     Observe {
+        #[command(subcommand)]
+        action: Option<ObserveAction>,
+
         /// Run discovery once and exit
         #[arg(long)]
         once: bool,
@@ -613,6 +616,16 @@ enum BusAction {
         /// StateDb path (default ~/.gestalt/state.db)
         #[arg(long)]
         db: Option<String>,
+    },
+}
+
+#[derive(Subcommand, Debug, Clone)]
+pub enum ObserveAction {
+    /// Install telemetry observation hooks for all discovered agents
+    InstallHooks {
+        /// Dry run without writing config files
+        #[arg(long)]
+        dry_run: bool,
     },
 }
 
@@ -2521,7 +2534,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         },
 
-        Commands::Observe { once } => {
+        Commands::Observe { action, once } => {
+            if let Some(ObserveAction::InstallHooks { dry_run }) = action {
+                let res = commands::observe_install::install_hooks(dry_run)?;
+                println!("{}", serde_json::to_string_pretty(&res)?);
+                return Ok(());
+            }
             if once {
                 let results = observe::discover_agents()?;
                 println!("[Discovery] Starting agent discovery pass...");
