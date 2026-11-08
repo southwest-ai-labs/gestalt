@@ -4,7 +4,7 @@ use axum::{
     http::StatusCode,
     middleware::{self, Next},
     response::IntoResponse,
-    routing::post,
+    routing::{get, post},
     Json, Router,
 };
 use gestalt_core::application::agent::registry::{AgentEntry, AgentRegistry};
@@ -41,6 +41,11 @@ static NEXT_RUN_ID: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUs
 
 fn active_runs() -> &'static std::sync::Mutex<HashMap<usize, ActiveRunEntry>> {
     ACTIVE_RUNS.get_or_init(|| std::sync::Mutex::new(HashMap::new()))
+}
+
+/// Returns the number of currently active orchestration runs.
+pub fn active_runs_count() -> usize {
+    active_runs().lock().map(|m| m.len()).unwrap_or(0)
 }
 
 /// Finalize and cancel all in-flight Task API orchestrations on server shutdown concurrently,
@@ -122,6 +127,7 @@ pub struct TaskRequest {
 pub fn router() -> Router<BusState> {
     Router::new()
         .route("/api/task", post(handle_task_http))
+        .route("/api/admin/status", get(crate::admin_telemetry::handle_admin_status))
         .merge(crate::xavier_plugin::router())
 }
 

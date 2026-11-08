@@ -15,6 +15,7 @@ mod config;
 mod observe;
 mod repl;
 mod shutdown;
+pub mod admin_telemetry;
 pub mod commands;
 pub mod task_api;
 pub mod xavier_plugin;
