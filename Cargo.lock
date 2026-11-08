@@ -1290,6 +1290,7 @@ dependencies = [
  "gestalt-state",
  "serde",
  "serde_json",
+ "sha2",
  "tokio",
  "tokio-tungstenite",
  "tracing",

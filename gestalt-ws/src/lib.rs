@@ -134,6 +134,82 @@ pub struct BusEvent {
     pub ts: String,
 }
 
+impl BusEvent {
+    /// Build a `BusEvent` filling `ts` with the current UTC RFC3339 time.
+    pub fn new(
+        agent: impl Into<String>,
+        event_type: impl Into<String>,
+        summary: impl Into<String>,
+    ) -> Self {
+        Self {
+            agent: agent.into(),
+            event_type: event_type.into(),
+            run_id: None,
+            project: None,
+            state: None,
+            summary: summary.into(),
+            metadata: serde_json::Value::Null,
+            ts: chrono::Utc::now().to_rfc3339(),
+        }
+    }
+
+    /// Attach a run id.
+    pub fn with_run_id(mut self, run_id: impl Into<String>) -> Self {
+        self.run_id = Some(run_id.into());
+        self
+    }
+
+    /// Attach a project name.
+    pub fn with_project(mut self, project: impl Into<String>) -> Self {
+        self.project = Some(project.into());
+        self
+    }
+
+    /// Attach an agent state.
+    pub fn with_state(mut self, state: impl Into<String>) -> Self {
+        self.state = Some(state.into());
+        self
+    }
+
+    /// Attach traceability metadata (llm, provider, decision, requested_by, ...).
+    pub fn with_metadata(mut self, metadata: serde_json::Value) -> Self {
+        self.metadata = metadata;
+        self
+    }
+
+    /// Override the RFC3339 timestamp (mainly for tests).
+    pub fn with_ts(mut self, ts: impl Into<String>) -> Self {
+        self.ts = ts.into();
+        self
+    }
+
+    /// The timeline run_id used for persistence: the event's own run_id when
+    /// present, otherwise a synthetic "bus" bucket so events without a run
+    /// still land in a queryable timeline stream.
+    pub fn timeline_run_id(&self) -> String {
+        self.run_id.clone().unwrap_or_else(|| "bus".to_string())
+    }
+
+    /// Stable content hash used for dedup: SHA-256 over the SEMANTIC identity
+    /// of the event (agent + type + run + project + state + summary).
+    pub fn dedup_hash(&self) -> String {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(self.agent.as_bytes());
+        hasher.update([0u8]);
+        hasher.update(self.event_type.as_bytes());
+        hasher.update([0u8]);
+        hasher.update(self.run_id.as_deref().unwrap_or("").as_bytes());
+        hasher.update([0u8]);
+        hasher.update(self.project.as_deref().unwrap_or("").as_bytes());
+        hasher.update([0u8]);
+        hasher.update(self.state.as_deref().unwrap_or("").as_bytes());
+        hasher.update([0u8]);
+        hasher.update(self.summary.as_bytes());
+        format!("{:x}", hasher.finalize())
+    }
+}
+
 /// Decoupled EventStream trait to support unified adapter behaviors.
 pub trait EventStream {
     /// Publish a BusEvent onto the WebSocket stream.

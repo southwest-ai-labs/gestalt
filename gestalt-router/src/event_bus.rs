@@ -13,125 +13,15 @@
 //! StateDb and can be re-sunk later (cursor-based replay).
 
 use gestalt_state::StateDb;
-use serde::{Deserialize, Serialize};
+
 use std::sync::Arc;
 use tracing::warn;
 
 /// How many seconds back we consider an event a duplicate (same stable hash).
 pub const DEDUP_WINDOW_SECS: i64 = 300;
 
-/// A structured event pushed onto the universal information bus.
-///
-/// Carries full traceability metadata: who sent it (`agent`), what happened
-/// (`event_type`, `state`), which run/project it belongs to, and free-form
-/// `metadata` for LLM/provider/decision context.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct BusEvent {
-    /// Originating agent: "hermes" | "jules" | "agent-cli" | "gestalt" | ...
-    pub agent: String,
-    /// Event kind: "run_started" | "agent_state" | "checkpoint" | "decision" | ...
-    pub event_type: String,
-    /// Run identifier, when the event belongs to a Gestalt orchestration run.
-    #[serde(default)]
-    pub run_id: Option<String>,
-    /// Project name (e.g. "gestalt", "xavier", "nido").
-    #[serde(default)]
-    pub project: Option<String>,
-    /// Agent state: Pending | Running | Success | Timeout | Crashed | NoChanges.
-    #[serde(default)]
-    pub state: Option<String>,
-    /// Human-readable one-line summary of what happened.
-    pub summary: String,
-    /// Free-form traceability metadata: {"llm": "...", "provider": "...",
-    /// "decision": "...", "requested_by": "...", "tool_calls": N, ...}.
-    #[serde(default)]
-    pub metadata: serde_json::Value,
-    /// RFC3339 timestamp of the event.
-    #[serde(default)]
-    pub ts: String,
-}
-
-impl BusEvent {
-    /// Build a `BusEvent` filling `ts` with the current UTC RFC3339 time.
-    pub fn new(
-        agent: impl Into<String>,
-        event_type: impl Into<String>,
-        summary: impl Into<String>,
-    ) -> Self {
-        Self {
-            agent: agent.into(),
-            event_type: event_type.into(),
-            run_id: None,
-            project: None,
-            state: None,
-            summary: summary.into(),
-            metadata: serde_json::Value::Null,
-            ts: chrono::Utc::now().to_rfc3339(),
-        }
-    }
-
-    /// Attach a run id.
-    pub fn with_run_id(mut self, run_id: impl Into<String>) -> Self {
-        self.run_id = Some(run_id.into());
-        self
-    }
-
-    /// Attach a project name.
-    pub fn with_project(mut self, project: impl Into<String>) -> Self {
-        self.project = Some(project.into());
-        self
-    }
-
-    /// Attach an agent state.
-    pub fn with_state(mut self, state: impl Into<String>) -> Self {
-        self.state = Some(state.into());
-        self
-    }
-
-    /// Attach traceability metadata (llm, provider, decision, requested_by, ...).
-    pub fn with_metadata(mut self, metadata: serde_json::Value) -> Self {
-        self.metadata = metadata;
-        self
-    }
-
-    /// Override the RFC3339 timestamp (mainly for tests).
-    pub fn with_ts(mut self, ts: impl Into<String>) -> Self {
-        self.ts = ts.into();
-        self
-    }
-
-    /// The timeline run_id used for persistence: the event's own run_id when
-    /// present, otherwise a synthetic "bus" bucket so events without a run
-    /// still land in a queryable timeline stream.
-    pub fn timeline_run_id(&self) -> String {
-        self.run_id.clone().unwrap_or_else(|| "bus".to_string())
-    }
-
-    /// Stable content hash used for dedup: SHA-256 over the SEMANTIC identity
-    /// of the event (agent + type + run + project + state + summary).
-    ///
-    /// NOTE: `ts` is intentionally EXCLUDED — emitters generate a fresh
-    /// timestamp on every push (e.g. event.py), so including it would make
-    /// every push look unique and dedup would never fire. Two pushes of the
-    /// same logical event (retries, replay, cron tick re-sent) share the same
-    /// hash and are skipped within the dedup window.
-    pub fn dedup_hash(&self) -> String {
-        use sha2::{Digest, Sha256};
-        let mut hasher = Sha256::new();
-        hasher.update(self.agent.as_bytes());
-        hasher.update([0u8]);
-        hasher.update(self.event_type.as_bytes());
-        hasher.update([0u8]);
-        hasher.update(self.run_id.as_deref().unwrap_or("").as_bytes());
-        hasher.update([0u8]);
-        hasher.update(self.project.as_deref().unwrap_or("").as_bytes());
-        hasher.update([0u8]);
-        hasher.update(self.state.as_deref().unwrap_or("").as_bytes());
-        hasher.update([0u8]);
-        hasher.update(self.summary.as_bytes());
-        format!("{:x}", hasher.finalize())
-    }
-}
+/// Re-export the canonical `BusEvent` from `gestalt-ws`.
+pub use gestalt_ws::BusEvent;
 
 /// Persist a bus event durably in the StateDb timeline.
 ///
