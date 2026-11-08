@@ -7,7 +7,10 @@
 pub mod bus;
 
 use axum::extract::{Query, State};
-use bus::{list_events_http, BusState, EventsQuery};
+#[path = "../src/api_routes/mod.rs"]
+pub mod api_routes;
+use api_routes::event_query::{list_events_http, EventsQuery};
+use bus::BusState;
 use gestalt_router::event_bus::BusEvent;
 use gestalt_state::StateDb;
 use std::sync::Arc;
@@ -35,7 +38,7 @@ async fn it_should_query_events_with_filters_and_pagination() {
         agent: None,
         event_type: None,
         project: None,
-        after_seq: None,
+        since_seq: None,
         limit: None,
     };
     let response = list_events_http(State(state.clone()), Query(params))
@@ -49,7 +52,7 @@ async fn it_should_query_events_with_filters_and_pagination() {
         agent: None,
         event_type: None,
         project: Some("project-x".to_string()),
-        after_seq: None,
+        since_seq: None,
         limit: None,
     };
     let response = list_events_http(State(state.clone()), Query(params))
@@ -70,7 +73,7 @@ async fn it_should_query_events_with_filters_and_pagination() {
         agent: Some("agent-b".to_string()),
         event_type: None,
         project: None,
-        after_seq: None,
+        since_seq: None,
         limit: None,
     };
     let response = list_events_http(State(state.clone()), Query(params))
@@ -85,7 +88,7 @@ async fn it_should_query_events_with_filters_and_pagination() {
         agent: None,
         event_type: None,
         project: None,
-        after_seq: Some(0),
+        since_seq: Some(0),
         limit: Some(2),
     };
     let response = list_events_http(State(state.clone()), Query(params))
@@ -103,7 +106,7 @@ async fn it_should_query_events_with_filters_and_pagination() {
         agent: None,
         event_type: None,
         project: None,
-        after_seq: Some(cursor),
+        since_seq: Some(cursor),
         limit: Some(2),
     };
     let response = list_events_http(State(state.clone()), Query(params))

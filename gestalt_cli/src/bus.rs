@@ -54,7 +54,10 @@ pub struct BusState {
 pub fn build_router(state: BusState) -> Router {
     Router::new()
         .route("/api/event", post(handle_event_http))
-        .route("/api/events", get(list_events_http))
+        .route(
+            "/api/events",
+            get(crate::api_routes::event_query::list_events_http),
+        )
         .route("/healthz", get(healthz))
         .route("/api/health/providers", get(providers_health_http))
         .with_state(state)
@@ -103,43 +106,6 @@ pub async fn handle_event_http(
             })))
         },
     }
-}
-
-/// `GET /api/events` — tail of recent bus events with filtering and cursor pagination.
-pub async fn list_events_http(
-    State(state): State<BusState>,
-    axum::extract::Query(params): axum::extract::Query<EventsQuery>,
-) -> Result<Json<serde_json::Value>, (axum::http::StatusCode, String)> {
-    let limit = params.limit.unwrap_or(50).clamp(1, 500);
-    let events = state
-        .db
-        .query_timeline(
-            params.agent.as_deref(),
-            params.event_type.as_deref(),
-            params.project.as_deref(),
-            params.after_seq,
-            limit,
-        )
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-
-    let next_seq = events.last().and_then(|e| e.seq);
-
-    Ok(Json(serde_json::json!({
-        "count": events.len(),
-        "events": events,
-        "next_seq": next_seq,
-        "cursor": next_seq,
-    })))
-}
-
-#[derive(serde::Deserialize, Clone)]
-pub struct EventsQuery {
-    pub agent: Option<String>,
-    #[serde(alias = "type")]
-    pub event_type: Option<String>,
-    pub project: Option<String>,
-    pub after_seq: Option<i64>,
-    pub limit: Option<i64>,
 }
 
 /// `GET /healthz` — liveness probe.
