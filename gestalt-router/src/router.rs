@@ -166,7 +166,10 @@ impl Router {
                             Some("running") | Some("pending") | None
                         );
                         if is_active {
-                            self.cancelled_agent_ids.lock().unwrap().push(agent.id.clone());
+                            self.cancelled_agent_ids
+                                .lock()
+                                .unwrap()
+                                .push(agent.id.clone());
                             self.mem_state.set_agent_state(rid, &agent.id, "crashed");
                             let _ = self.state_db.upsert_agent(
                                 rid,
@@ -223,7 +226,10 @@ impl Router {
                         );
                         if is_active {
                             active_agent_ids.push(agent.id.clone());
-                            self.cancelled_agent_ids.lock().unwrap().push(agent.id.clone());
+                            self.cancelled_agent_ids
+                                .lock()
+                                .unwrap()
+                                .push(agent.id.clone());
                             self.mem_state.set_agent_state(rid, &agent.id, "crashed");
                             let _ = self.state_db.upsert_agent(
                                 rid,
