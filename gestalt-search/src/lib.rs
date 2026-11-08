@@ -281,6 +281,7 @@ impl LocalSearchEngine for TantivySearchEngine {
 }
 
 mod hybrid;
+pub mod tag_filter;
 
 pub use hybrid::{HybridSearchEngine, SearchMode};
 

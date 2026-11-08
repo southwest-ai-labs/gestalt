@@ -246,7 +246,8 @@ def run():
                 try:
                     patch_proc = subprocess.run(["git", "apply", "--ignore-whitespace", "-"], cwd=GESTALT_DIR, input=patch, text=True)
                     if patch_proc.returncode == 0 and check_compilation():
-                        subprocess.run(["git", "commit", "-am", f"feat(wave): integrate {tid} patch from Jules session {sid}"], cwd=GESTALT_DIR, check=True)
+                        subprocess.run(["git", "add", "-A"], cwd=GESTALT_DIR, check=True)
+                        subprocess.run(["git", "commit", "-m", f"feat(wave): integrate {tid} patch from Jules session {sid}"], cwd=GESTALT_DIR, check=True)
                         subprocess.run(["git", "push", "origin", "main"], cwd=GESTALT_DIR, check=True)
                         log(f"✅ Patch para {tid} integrado y pusheado a main!")
                 except Exception as e:
