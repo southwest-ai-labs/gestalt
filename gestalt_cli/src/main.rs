@@ -261,8 +261,28 @@ enum McpAction {
     },
 }
 
+#[derive(Subcommand, Debug, Clone)]
+pub enum AcpAction {
+    /// Start the ACP server
+    Serve {
+        /// Run in stdio mode (standard input/output JSON-RPC)
+        #[arg(long)]
+        stdio: bool,
+
+        /// Optional HTTP port (defaults to 8082) for HTTP/SSE transport
+        #[arg(long)]
+        port: Option<u16>,
+    },
+}
+
 #[derive(Subcommand, Debug)]
 enum Commands {
+    /// Agent Context Protocol (ACP) commands
+    Acp {
+        #[command(subcommand)]
+        action: AcpAction,
+    },
+
     /// Model Context Protocol (MCP) commands
     Mcp {
         #[command(subcommand)]
@@ -955,6 +975,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(std::io::Error::other)??;
 
     match args.command {
+        Commands::Acp { action } => match action {
+            AcpAction::Serve { stdio, port } => {
+                crate::commands::acp_serve::serve(stdio, port, shutdown).await?;
+            }
+        },
+
         Commands::Mcp { action } => match action {
             McpAction::Serve {
                 host,
