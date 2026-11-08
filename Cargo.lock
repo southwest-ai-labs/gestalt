@@ -1297,6 +1297,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gestalt_acp"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 1.0.69",
+ "tokio",
+]
+
+[[package]]
 name = "gestalt_cli"
 version = "1.0.0"
 dependencies = [
