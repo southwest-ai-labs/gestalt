@@ -15,7 +15,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+pub mod agent_status;
 pub mod bus_query;
+use crate::tools::agent_status::GestaltAgentStatusHandler;
 use crate::tools::bus_query::BusQueryHandler;
 
 // ---------------------------------------------------------------------------
@@ -1097,6 +1099,21 @@ pub async fn register_standard_tools(server: &McpServer) -> anyhow::Result<()> {
                 "required": ["index_path"]
             }),
             SearchStatsHandler,
+        )
+        .await?;
+
+    // gestalt_agent_status
+    server
+        .add_tool(
+            "gestalt_agent_status".to_string(),
+            Some("Check installed agent CLI versions".to_string()),
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "cli_name": { "type": "string", "description": "Agent CLI name (default 'gestalt')" }
+                }
+            }),
+            GestaltAgentStatusHandler,
         )
         .await?;
 

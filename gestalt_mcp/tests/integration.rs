@@ -436,3 +436,27 @@ async fn test_gestalt_agent_run_missing_question() {
         panic!("Expected Text content block");
     }
 }
+
+#[tokio::test]
+async fn test_gestalt_agent_status_tool() {
+    let server = test_server().await;
+    let args = Some(
+        [("cli_name".to_string(), serde_json::json!("gestalt"))]
+            .into_iter()
+            .collect(),
+    );
+
+    let result = server.call_tool("gestalt_agent_status", args).await;
+    assert!(result.is_ok());
+    let _res = result.unwrap();
+
+    let bad_args = Some(
+        [("cli_name".to_string(), serde_json::json!("ls"))]
+            .into_iter()
+            .collect(),
+    );
+    let bad_result = server.call_tool("gestalt_agent_status", bad_args).await;
+    assert!(bad_result.is_ok());
+    let bad_res = bad_result.unwrap();
+    assert!(bad_res.is_error.unwrap_or(false));
+}
