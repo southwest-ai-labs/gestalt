@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 description = "Gestalt WebSocket server — broadcasts timeline events to connected clients"
 
+[lib]
+name = "gestalt_ws"
+
 [dependencies]
 tokio = { version = "1.49", features = ["full"] }
 tokio-tungstenite = "0.30"

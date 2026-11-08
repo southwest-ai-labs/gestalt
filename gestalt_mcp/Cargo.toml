@@ -11,10 +11,11 @@ path = "src/main.rs"
 [lib]
 name = "gestalt_mcp"
 path = "src/lib.rs"
+doctest = false
 
 [dependencies]
 gestalt_core = { path = "../gestalt_core" }
-gestalt-search = { path = "../gestalt-search" }
+gestalt_search = { path = "../gestalt-search", package = "gestalt-search" }
 
 # Async runtime
 tokio = { version = "1.49", features = ["full"] }

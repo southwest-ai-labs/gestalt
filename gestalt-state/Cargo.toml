@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 description = "Gestalt State — SQLite StateDB + DashMap MemState for agent orchestration"
 
+[lib]
+name = "gestalt_state"
+
 [dependencies]
 tokio = { version = "1.49", features = ["full"] }
 serde = { version = "1.0", features = ["derive"] }

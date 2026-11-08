@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use reqwest::Client;
-use crate::adapters::a2a::{AgentCard, TaskPayload, AGENT_JSON_PATH};
+use super::{AgentCard, TaskPayload, AGENT_JSON_PATH};
 
 #[derive(Error, Debug)]
 pub enum A2aError {

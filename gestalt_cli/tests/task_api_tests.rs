@@ -9,6 +9,8 @@
 //     it("should return 404 listing available agents", || { ... })
 // })
 
+#[path = "../src/admin_telemetry.rs"]
+pub mod admin_telemetry;
 #[path = "../src/api_routes/mod.rs"]
 pub mod api_routes;
 #[path = "../src/bus.rs"]
