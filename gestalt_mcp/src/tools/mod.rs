@@ -15,6 +15,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+pub mod bus_query;
+use crate::tools::bus_query::BusQueryHandler;
+
 // ---------------------------------------------------------------------------
 // Shared task store (simple in-memory)
 // ---------------------------------------------------------------------------
@@ -828,6 +831,36 @@ pub async fn register_standard_tools(server: &McpServer) -> anyhow::Result<()> {
                 "required": ["message"]
             }),
             EchoHandler,
+        )
+        .await?;
+
+    // gestalt_bus_query
+    server
+        .add_tool(
+            "gestalt_bus_query".to_string(),
+            Some("Query recent mesh events and agent activities".to_string()),
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "limit": {
+                        "type": "number",
+                        "description": "Number of events to retrieve"
+                    },
+                    "agent": {
+                        "type": "string",
+                        "description": "Optional agent name filter"
+                    },
+                    "event_type": {
+                        "type": "string",
+                        "description": "Optional event type filter"
+                    },
+                    "project": {
+                        "type": "string",
+                        "description": "Optional project filter"
+                    }
+                }
+            }),
+            BusQueryHandler,
         )
         .await?;
 
