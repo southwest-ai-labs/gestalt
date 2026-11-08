@@ -11,6 +11,7 @@ pub mod event_bus;
 pub mod health;
 pub mod integrate;
 pub mod lease;
+pub mod observe;
 pub mod otel;
 pub mod overlap;
 pub mod retry;
