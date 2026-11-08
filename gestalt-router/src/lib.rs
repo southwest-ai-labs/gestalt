@@ -11,6 +11,7 @@ pub mod health;
 pub mod integrate;
 pub mod otel;
 pub mod overlap;
+pub mod retry;
 pub mod router;
 pub mod run;
 pub mod run_state;
