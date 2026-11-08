@@ -183,3 +183,7 @@ For information about supported versions and how to report vulnerabilities, plea
 ## License
 
 Gestalt is distributed under the terms of the MIT License. See [LICENSE](LICENSE) for details.
+
+## Documentation
+
+- [Gestalt Standalone & Plugin Integration Specification](docs/protocol/GESTALT_PLUGIN_STANDALONE_SPEC.md)
