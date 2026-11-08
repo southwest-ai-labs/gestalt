@@ -597,6 +597,25 @@ enum BusAction {
         metadata: Option<String>,
     },
 
+    /// Subscribe to live bus events via WebSocket
+    Subscribe {
+        /// WebSocket URL to connect to
+        #[arg(long, default_value = "ws://127.0.0.1:8081/ws")]
+        url: String,
+
+        /// Filter by agent name
+        #[arg(long)]
+        agent: Option<String>,
+
+        /// Filter by event type
+        #[arg(long)]
+        event_type: Option<String>,
+
+        /// Output raw JSON instead of colored pretty output
+        #[arg(long)]
+        json: bool,
+    },
+
     /// Replay unsynced bus events to Xavier (cursor sweep after outage)
     Replay {
         /// Filter events by project name (e.g. gara-g, hosteler-ia, xavier, OrionHealth)
@@ -2184,6 +2203,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                         ev.agent, ev.event_type
                     ),
                 }
+            },
+
+            BusAction::Subscribe {
+                url,
+                agent,
+                event_type,
+                ..
+            } => {
+                crate::commands::bus_subscribe::run_subscribe(&url, agent, event_type).await?;
             },
 
             BusAction::Replay {

@@ -31,6 +31,10 @@ rusqlite = { version = "0.32", features = ["bundled"] }
 axum = "0.8"
 toml = "1.1"
 tempfile = "3.24"
+tokio-tungstenite = "0.26"
+futures-util = "0.3"
+anstyle-parse = "1.0.0"
+colored = "3.0"
 
 [dev-dependencies]
 libc = "0.2.191"
