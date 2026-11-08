@@ -178,13 +178,27 @@ def run():
         log("No se encontró JULES_API_KEY en ~/.hermes/.env")
         return
 
-    wave_file = GESTALT_DIR / ".gitcore" / "waves" / "ola-v1-gestalt" / "dispatched_sessions.json"
+    wave_dirs = [
+        GESTALT_DIR / ".gitcore" / "waves" / "ola-v2-gestalt",
+        GESTALT_DIR / ".gitcore" / "waves" / "ola-v1-gestalt"
+    ]
+    active_wave_file = None
     tracked_sessions = []
-    if wave_file.exists():
-        try:
-            tracked_sessions = json.loads(wave_file.read_text())
-        except Exception as e:
-            log(f"Aviso leyendo wave_file: {e}")
+    for wdir in wave_dirs:
+        wfile = wdir / "dispatched_sessions.json"
+        if wfile.exists():
+            try:
+                sessions = json.loads(wfile.read_text())
+                if any(not s.get("integrated") for s in sessions):
+                    active_wave_file = wfile
+                    tracked_sessions = sessions
+                    break
+                elif not active_wave_file:
+                    active_wave_file = wfile
+                    tracked_sessions = sessions
+            except Exception as e:
+                log(f"Aviso leyendo {wfile}: {e}")
+    wave_file = active_wave_file or (GESTALT_DIR / ".gitcore" / "waves" / "ola-v2-gestalt" / "dispatched_sessions.json")
 
     active_sessions = []
     completed_sessions = []
