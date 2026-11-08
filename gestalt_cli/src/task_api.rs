@@ -281,8 +281,8 @@ async fn handle_task_http(
     State(bus_state): State<BusState>,
     Json(req): Json<TaskRequest>,
 ) -> impl IntoResponse {
-    let registry_path = "agent-registry.toml";
-    let registry = match AgentRegistry::load(registry_path) {
+    let registry_path = AgentRegistry::resolve_path("agent-registry.toml");
+    let registry = match AgentRegistry::load(&registry_path) {
         Ok(r) => r,
         Err(e) => {
             return (
