@@ -17,9 +17,9 @@ tokio-util = "0.7"
 dashmap = "5.5"
 uuid = { version = "1.4", features = ["v4"] }
 similar = "2.6.0"
-axum = "0.7"
-tower = { version = "0.4", features = ["util"] }
-tower-http = { version = "0.5", features = ["cors", "trace"] }
+axum = "0.8"
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
 futures = "0.3"
 tokio-stream = { version = "0.1.19", features = ["sync"] }
 
