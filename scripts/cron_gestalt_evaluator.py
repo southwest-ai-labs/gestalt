@@ -172,54 +172,90 @@ def run():
     # 2. Verificar compilación
     check_compilation()
 
-    # 3. Revisar estado de sesiones en ambas cuentas
+    # 3. Revisar estado de sesiones de la ola en Cuenta A (iberi22)
+    key_a = keys.get("A")
+    if not key_a:
+        log("No se encontró JULES_API_KEY en ~/.hermes/.env")
+        return
+
+    wave_file = GESTALT_DIR / ".gitcore" / "waves" / "ola-v1-gestalt" / "dispatched_sessions.json"
+    tracked_sessions = []
+    if wave_file.exists():
+        try:
+            tracked_sessions = json.loads(wave_file.read_text())
+        except Exception as e:
+            log(f"Aviso leyendo wave_file: {e}")
+
     active_sessions = []
-    completed_unmerged = []
+    completed_sessions = []
+    feedback_sessions = []
 
-    for acc, key in keys.items():
-        sessions = get_jules_gestalt_sessions(key)
-        for s in sessions:
-            st = s.get("state")
-            if st in ("IN_PROGRESS", "QUEUED"):
-                active_sessions.append((acc, s))
-            elif st == "COMPLETED":
-                # Ver si tiene outputs con patch no integrado
-                outputs = s.get("outputs", [])
-                for out in outputs:
-                    patch = out.get("changeSet", {}).get("gitPatch", {}).get("unidiffPatch")
-                    if patch:
-                        completed_unmerged.append((acc, s, out))
+    for item in tracked_sessions:
+        sid = item.get("session_id")
+        tid = item.get("task_id", sid)
+        url = f"{JULES_API_BASE}/sessions/{sid}"
+        req = urllib.request.Request(url, headers={"X-Goog-Api-Key": key_a})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as resp:
+                s = json.loads(resp.read().decode())
+                st = s.get("state")
+                if st in ("IN_PROGRESS", "QUEUED"):
+                    active_sessions.append((tid, sid, s))
+                elif st == "AWAITING_USER_FEEDBACK":
+                    feedback_sessions.append((tid, sid, s))
+                elif st == "COMPLETED":
+                    completed_sessions.append((tid, sid, s))
+        except Exception as e:
+            log(f"Error consultando sesión {sid}: {e}")
 
-    log(f"Sesiones activas en vuelo: {len(active_sessions)}")
+    log(f"Estado ola Gestalt: Activas={len(active_sessions)}, AwaitingFeedback={len(feedback_sessions)}, Completadas={len(completed_sessions)}")
 
-    # 4. Si no hay sesiones activas, avanzar en el roadmap
-    if not active_sessions:
-        open_issues = get_open_issues()
-        # Filtrar issues relevantes para roadmap técnico
-        target_issues = [i for i in open_issues if i.get("number") in (700, 690, 688)]
-        if target_issues:
-            next_issue = target_issues[0]
-            num = next_issue.get("number")
-            title = next_issue.get("title")
-            
-            # Obtener cuerpo completo del issue
-            try:
-                proc = subprocess.run(
-                    ["gh", "issue", "view", str(num), "-R", "southwest-ai-labs/gestalt", "--json", "body"],
-                    capture_output=True,
-                    text=True,
-                    check=True
-                )
-                body = json.loads(proc.stdout).get("body", "")
-            except Exception:
-                body = title
+    # Auto-desbloqueo de sesiones AWAITING_USER_FEEDBACK
+    for tid, sid, s in feedback_sessions:
+        log(f"Desbloqueando sesión {tid} ({sid}) con confirmación de continuación...")
+        try:
+            unblock_payload = {
+                "prompt": "Proceed with the planned implementation. Complete changes in the target island files only, verify with cargo check and tests, and open the Pull Request."
+            }
+            ureq = urllib.request.Request(
+                f"{JULES_API_BASE}/sessions/{sid}:sendMessage",
+                data=json.dumps(unblock_payload).encode("utf-8"),
+                headers={"Content-Type": "application/json", "X-Goog-Api-Key": key_a}
+            )
+            with urllib.request.urlopen(ureq, timeout=15) as uresp:
+                log(f"✅ Respuesta enviada a {tid} ({sid})")
+        except Exception as e:
+            log(f"Aviso desbloqueando {sid}: {e}")
 
-            # Balancear cuenta: usar Cuenta A primero o Cuenta B si A está ocupada
-            chosen_acc = "A" if "A" in keys else "B"
-            dispatch_jules_session(keys[chosen_acc], chosen_acc, num, title, body)
-        else:
-            log("No hay issues prioritarios pendientes en el backlog de Gestalt.")
-            emit_bus_event("gestalt-evaluator", "roadmap_status", "All Gestalt primary roadmap issues completed or triaged")
+    # Integración automática de sesiones COMPLETED
+    for tid, sid, s in completed_sessions:
+        outputs = s.get("outputs", [])
+        for out in outputs:
+            pr = out.get("pullRequest", {})
+            pr_num = pr.get("number")
+            patch = out.get("changeSet", {}).get("gitPatch", {}).get("unidiffPatch")
+            if pr_num:
+                log(f"Detectado PR #{pr_num} para {tid}. Verificando...")
+                try:
+                    subprocess.run(["gh", "pr", "merge", str(pr_num), "-R", "southwest-ai-labs/gestalt", "--rebase", "--auto"], check=True)
+                    log(f"✅ PR #{pr_num} configurado para auto-merge!")
+                except Exception as e:
+                    log(f"Aviso en merge de PR #{pr_num}: {e}")
+            elif patch:
+                log(f"Detectado gitPatch para {tid}. Aplicando...")
+                try:
+                    patch_proc = subprocess.run(["git", "apply", "--ignore-whitespace", "-"], cwd=GESTALT_DIR, input=patch, text=True)
+                    if patch_proc.returncode == 0 and check_compilation():
+                        subprocess.run(["git", "commit", "-am", f"feat(wave): integrate {tid} patch from Jules session {sid}"], cwd=GESTALT_DIR, check=True)
+                        subprocess.run(["git", "push", "origin", "main"], cwd=GESTALT_DIR, check=True)
+                        log(f"✅ Patch para {tid} integrado y pusheado a main!")
+                except Exception as e:
+                    log(f"Aviso aplicando patch para {tid}: {e}")
+
+    # 4. Si todas las sesiones de la ola están completadas, avanzar roadmap
+    if len(active_sessions) == 0 and len(feedback_sessions) == 0 and len(tracked_sessions) > 0:
+        log("🎉 Toda la ola actual de Gestalt ha concluido. Analizando avance de roadmap...")
+        emit_bus_event("gestalt-evaluator", "wave_completed", "Gestalt Wave completed successfully.")
 
     log("=== Ciclo de orquestación completado ===")
 
