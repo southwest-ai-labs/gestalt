@@ -201,7 +201,8 @@ pub enum RoutingStrategy {
 impl AgentRegistry {
     /// Resuelve la ruta absoluta de `agent-registry.toml` según la siguiente prioridad:
     /// 1. GESTALT_HOME environment variable (`$GESTALT_HOME/agent-registry.toml`) si está configurada y existe el archivo.
-    /// 2. Repo root descubierto desde CWD (subiendo directorios hasta encontrar `.git` o `Cargo.toml` raíz de workspace, comprobando `agent-registry.toml` o `apps/gestalt/agent-registry.toml`).
+    /// 2. Repo root descubierto desde CWD o directorio del ejecutable (subiendo directorios hasta encontrar `.git` o `Cargo.toml` raíz de workspace, comprobando `agent-registry.toml` o `apps/gestalt/agent-registry.toml`).
+    ///    - Y check path absoluto específico: `apps/gestalt/agent-registry.toml`
     /// 3. Fallback `~/.gestalt/agent-registry.toml` si existe.
     /// 4. Fallback a la ruta proporcionada o CWD como último recurso.
     pub fn resolve_path(provided_path: impl AsRef<Path>) -> PathBuf {
@@ -227,16 +228,16 @@ impl AgentRegistry {
             }
         }
 
-        // Priority 2: Walk up directory tree from CWD to discover repo root (.git or Cargo.toml workspace root)
-        if let Ok(mut current_dir) = std::env::current_dir() {
+        let search_tree = |start_dir: PathBuf| -> Option<PathBuf> {
+            let mut current_dir = start_dir;
             loop {
                 let candidate1 = current_dir.join(file_name);
                 if candidate1.exists() {
-                    return candidate1;
+                    return Some(candidate1);
                 }
                 let candidate2 = current_dir.join("apps").join("gestalt").join(file_name);
                 if candidate2.exists() {
-                    return candidate2;
+                    return Some(candidate2);
                 }
 
                 // Check if we reached repo root markers or root of filesystem
@@ -252,14 +253,40 @@ impl AgentRegistry {
                     // One extra check at workspace root before stopping if we just popped
                     let root_candidate1 = current_dir.join(file_name);
                     if root_candidate1.exists() {
-                        return root_candidate1;
+                        return Some(root_candidate1);
                     }
                     let root_candidate2 = current_dir.join("apps").join("gestalt").join(file_name);
                     if root_candidate2.exists() {
-                        return root_candidate2;
+                        return Some(root_candidate2);
                     }
                 }
             }
+            None
+        };
+
+        // Priority 2a: Walk up directory tree from CWD
+        if let Ok(cwd) = std::env::current_dir() {
+            if let Some(found) = search_tree(cwd) {
+                return found;
+            }
+        }
+
+        // Priority 2b: Walk up directory tree from Executable path
+        if let Ok(exe_path) = std::env::current_exe() {
+            if let Some(exe_dir) = exe_path.parent() {
+                if let Some(found) = search_tree(exe_dir.to_path_buf()) {
+                    return found;
+                }
+            }
+        }
+
+        // Priority 2c: Explicit fallback to absolute path
+        let explicit_fallback = PathBuf::from(format!(
+            "apps/gestalt/{}",
+            file_name
+        ));
+        if explicit_fallback.exists() {
+            return explicit_fallback;
         }
 
         // Priority 3: Fallback ~/.gestalt/agent-registry.toml

@@ -30,6 +30,12 @@ cargo build --release --workspace
 
 The compiled `gestalt` binary will be available at `./target/release/gestalt`.
 
+### Prerequisites / Building on NixOS
+
+```bash
+nix-shell --run "cargo check --workspace"
+```
+
 ### System Health Verification
 
 Verify environment readiness, database paths, and agent connectivity before running orchestrated workflows:
