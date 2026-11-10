@@ -632,6 +632,15 @@ impl StateDb {
         })
     }
 
+    /// Total count of timeline events in the database.
+    pub fn event_count(&self) -> Result<i64> {
+        let conn = self.conn.lock().unwrap();
+        let count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM timeline", [], |row| row.get(0))
+            .context("Failed to count timeline events")?;
+        Ok(count)
+    }
+
     /// Fetch timeline events for a run, ordered by sequence number.
     pub fn get_timeline(&self, run_id: &str, limit: i64) -> Result<Vec<TimelineEvent>> {
         let conn = self.conn.lock().unwrap();

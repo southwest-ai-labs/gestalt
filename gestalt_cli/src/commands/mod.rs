@@ -4,3 +4,5 @@ pub mod observe_install;
 pub mod acp_serve;
 pub mod bus_subscribe;
 pub mod bus_replay_daemon;
+pub mod status_tui;
+

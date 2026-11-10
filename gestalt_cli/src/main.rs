@@ -32,7 +32,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::task::JoinSet;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
 use ulid::Ulid;
 
@@ -301,7 +301,11 @@ enum Commands {
     },
 
     /// Check server status
-    Status,
+    Status {
+        /// Output in JSON format
+        #[arg(long)]
+        json: bool,
+    },
 
     /// Check environment sanity (doctor check)
     Doctor,
@@ -1079,24 +1083,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         },
 
-        Commands::Status => {
-            let tools_url = format!("{}/tools", url);
-            let client = http_client.clone();
-            let resp = tokio::task::spawn_blocking(move || client.get(&tools_url).send()).await??;
-
-            match resp {
-                resp if resp.status().is_success() => {
-                    info!("MCP Server is online at {}", url);
-                    println!("✅ Gestalt MCP Server: Online");
-                    println!("📍 {}", url);
-                },
-                _ => {
-                    warn!("MCP Server is offline at {}", url);
-                    println!("❌ Gestalt MCP Server: Offline");
-                    println!("📍 {}", url);
-                    std::process::exit(1);
-                },
-            }
+        Commands::Status { json } => {
+            crate::commands::status_tui::run_status(json).await?;
         },
 
         Commands::Doctor => {
