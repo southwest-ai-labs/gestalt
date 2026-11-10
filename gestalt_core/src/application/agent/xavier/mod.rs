@@ -32,6 +32,8 @@
 
 mod agent;
 mod client;
+mod decision;
 
 pub use agent::XavierAgent;
 pub use client::{build_decision_payload, XavierClient};
+pub use decision::{DecisionPromoter, DecisionRecord, DecisionStatus};
