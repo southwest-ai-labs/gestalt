@@ -1084,6 +1084,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
 
         Commands::Status { json } => {
+            if url != "http://127.0.0.1:8080" {
+                let test_url = format!("{}/tools", url.trim_end_matches('/'));
+                let client = http_client.clone();
+                let resp = tokio::task::spawn_blocking(move || client.get(&test_url).send()).await;
+                match resp {
+                    Ok(Ok(r)) if r.status().is_success() => {},
+                    _ => {
+                        eprintln!("❌ Target server is offline at {}", url);
+                        std::process::exit(1);
+                    }
+                }
+            }
             crate::commands::status_tui::run_status(json).await?;
         },
 
