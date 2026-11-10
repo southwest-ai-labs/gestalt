@@ -985,6 +985,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .init();
     }
 
+    let has_explicit_url = args.url.is_some();
     let url = args.url.unwrap_or_else(|| config.mcp.server_url.clone());
     let default_db = "tasks.json";
 
@@ -1084,7 +1085,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
 
         Commands::Status { json } => {
-            if url != "http://127.0.0.1:8080" {
+            if has_explicit_url {
                 let test_url = format!("{}/tools", url.trim_end_matches('/'));
                 let client = http_client.clone();
                 let resp = tokio::task::spawn_blocking(move || client.get(&test_url).send()).await;
