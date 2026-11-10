@@ -17,3 +17,8 @@ tracing = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 gestalt-state = { path = "../gestalt-state" }
 sha2 = "0.10"
+subtle = "2.6.1"
+axum = "0.8.9"
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }

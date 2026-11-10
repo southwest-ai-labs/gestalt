@@ -25,6 +25,7 @@
 //! | `"lock_released"`      | `LockReleased`        |
 
 pub use futures_util;
+pub mod auth;
 pub use futures_util::stream::BoxStream;
 pub use futures_util::{SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
