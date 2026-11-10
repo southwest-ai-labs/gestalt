@@ -47,7 +47,7 @@ pub fn render_status_report(bus_info: BusInfo, providers: HealthReport, locks: V
             check.message.unwrap_or_default()
         ));
     }
-    out.push_str("\n");
+    out.push('\n');
 
     // Panel 3: Active Worktrees & File Locks
     out.push_str("🔒 Active File Locks\n");

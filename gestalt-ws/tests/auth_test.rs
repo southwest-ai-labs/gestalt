@@ -7,10 +7,10 @@ use axum::{
 };
 use gestalt_ws::auth::{TokenValidator, ValidateAuth};
 use std::env;
-use std::sync::Mutex;
+use tokio::sync::Mutex;
 use tower::ServiceExt; // for `oneshot`
 
-static TEST_MUTEX: Mutex<()> = Mutex::new(());
+static TEST_MUTEX: Mutex<()> = Mutex::const_new(());
 
 async fn test_handler(_auth: ValidateAuth) -> &'static str {
     "ok"
@@ -22,7 +22,7 @@ fn app() -> Router {
 
 #[tokio::test]
 async fn test_auth_bypassed_when_token_unset() {
-    let _lock = TEST_MUTEX.lock().unwrap();
+    let _lock = TEST_MUTEX.lock().await;
     env::remove_var("GESTALT_BUS_TOKEN");
     
     let response = app()
@@ -35,7 +35,7 @@ async fn test_auth_bypassed_when_token_unset() {
 
 #[tokio::test]
 async fn test_auth_rejected_when_token_configured_but_missing() {
-    let _lock = TEST_MUTEX.lock().unwrap();
+    let _lock = TEST_MUTEX.lock().await;
     env::set_var("GESTALT_BUS_TOKEN", "secret-token");
     
     let response = app()
@@ -48,7 +48,7 @@ async fn test_auth_rejected_when_token_configured_but_missing() {
 
 #[tokio::test]
 async fn test_auth_accepted_with_valid_bearer_token() {
-    let _lock = TEST_MUTEX.lock().unwrap();
+    let _lock = TEST_MUTEX.lock().await;
     env::set_var("GESTALT_BUS_TOKEN", "secret-token");
     
     let response = app()
@@ -67,7 +67,7 @@ async fn test_auth_accepted_with_valid_bearer_token() {
 
 #[tokio::test]
 async fn test_auth_accepted_with_valid_query_token() {
-    let _lock = TEST_MUTEX.lock().unwrap();
+    let _lock = TEST_MUTEX.lock().await;
     env::set_var("GESTALT_BUS_TOKEN", "secret-token");
     
     let response = app()
@@ -85,7 +85,7 @@ async fn test_auth_accepted_with_valid_query_token() {
 
 #[tokio::test]
 async fn test_auth_rejected_with_invalid_token() {
-    let _lock = TEST_MUTEX.lock().unwrap();
+    let _lock = TEST_MUTEX.lock().await;
     env::set_var("GESTALT_BUS_TOKEN", "secret-token");
     
     let response = app()
