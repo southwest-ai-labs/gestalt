@@ -1420,6 +1420,7 @@ dependencies = [
  "async-trait",
  "clap",
  "gestalt-search",
+ "gestalt-state",
  "gestalt_core",
  "ignore",
  "lazy_static",

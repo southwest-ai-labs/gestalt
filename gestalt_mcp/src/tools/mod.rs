@@ -19,8 +19,10 @@ pub mod agent_status;
 pub mod run_stream;
 use crate::tools::run_stream::GestaltRunStreamHandler;
 pub mod bus_query;
+pub mod timeline_tools;
 use crate::tools::agent_status::GestaltAgentStatusHandler;
 use crate::tools::bus_query::BusQueryHandler;
+use crate::tools::timeline_tools::{GestaltHealthHandler, GestaltTimelineQueryHandler};
 
 // ---------------------------------------------------------------------------
 // Shared task store (simple in-memory)
@@ -1135,6 +1137,37 @@ pub async fn register_standard_tools(server: &McpServer) -> anyhow::Result<()> {
         )
         .await?;
 
+    // gestalt_timeline_query
+    server
+        .add_tool(
+            "gestalt_timeline_query".to_string(),
+            Some("Query the local Gestalt event timeline".to_string()),
+            serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "limit": { "type": "integer", "description": "Maximum number of events to return" },
+                    "agent": { "type": "string", "description": "Filter by agent ID" },
+                    "project": { "type": "string", "description": "Filter by project name" },
+                    "event_type": { "type": "string", "description": "Filter by event type" },
+                    "db_path": { "type": "string", "description": "Path to StateDb (optional)" }
+                }
+            }),
+            GestaltTimelineQueryHandler,
+        )
+        .await?;
+
+    // gestalt_health
+    server
+        .add_tool(
+            "gestalt_health".to_string(),
+            Some("Query provider health metrics and system status".to_string()),
+            serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+            GestaltHealthHandler,
+        )
+        .await?;
 
 
     Ok(())

@@ -16,6 +16,7 @@ doctest = false
 [dependencies]
 gestalt_core = { path = "../gestalt_core" }
 gestalt_search = { path = "../gestalt-search", package = "gestalt-search" }
+gestalt-state = { path = "../gestalt-state", package = "gestalt-state" }
 
 # Async runtime
 tokio = { version = "1.49", features = ["full"] }
