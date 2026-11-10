@@ -199,6 +199,12 @@ impl StateDb {
 
             CREATE INDEX IF NOT EXISTS idx_timeline_run ON timeline(run_id);
             CREATE INDEX IF NOT EXISTS idx_agents_run ON agents(run_id);
+
+            CREATE TABLE IF NOT EXISTS metadata (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
             ",
         )
         .context("Failed to run migrations")?;
@@ -479,6 +485,35 @@ impl StateDb {
             .context("Failed to read locks")?;
 
         Ok(locks)
+    }
+
+    // ── Metadata ────────────────────────────────────────────────────────
+
+    /// Get a metadata value by key.
+    pub fn get_metadata(&self, key: &str) -> Result<Option<String>> {
+        let conn = self.conn()?;
+        let mut stmt = conn.prepare("SELECT value FROM metadata WHERE key = ?1")?;
+        let mut rows = stmt.query([key])?;
+
+        if let Some(row) = rows.next()? {
+            let value: String = row.get(0)?;
+            Ok(Some(value))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// Set a metadata value.
+    pub fn set_metadata(&self, key: &str, value: &str) -> Result<()> {
+        self.execute_transaction(|tx| {
+            let now = Utc::now().to_rfc3339();
+            tx.execute(
+                "INSERT INTO metadata (key, value, updated_at) VALUES (?1, ?2, ?3)
+                 ON CONFLICT(key) DO UPDATE SET value = ?2, updated_at = ?3",
+                rusqlite::params![key, value, now],
+            )?;
+            Ok(())
+        })
     }
 
     // ── Timeline Events ───────────────────────────────────────────────
