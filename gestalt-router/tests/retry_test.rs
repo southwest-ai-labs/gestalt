@@ -49,11 +49,11 @@ fn test_retry_policy_with_jitter_bounds() {
         // At attempt 1, base delay is 200. Max jitter is 20% of 200 = 40.
         // So bounds are 160 to 240.
         let delay_1 = policy.calculate_delay(1);
-        assert!(delay_1 >= 160 && delay_1 <= 240, "Delay 1 {} not in bounds [160, 240]", delay_1);
+        assert!((160..=240).contains(&delay_1), "Delay 1 {} not in bounds [160, 240]", delay_1);
 
         // At attempt 2, base delay is 400. Max jitter is 20% of 400 = 80.
         // So bounds are 320 to 480.
         let delay_2 = policy.calculate_delay(2);
-        assert!(delay_2 >= 320 && delay_2 <= 480, "Delay 2 {} not in bounds [320, 480]", delay_2);
+        assert!((320..=480).contains(&delay_2), "Delay 2 {} not in bounds [320, 480]", delay_2);
     }
 }

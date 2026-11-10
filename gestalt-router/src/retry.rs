@@ -31,8 +31,8 @@ impl RetryPolicy {
         if self.jitter_factor > 0.0 {
             let bytes = Uuid::new_v4().into_bytes();
             let mut val = 0u64;
-            for i in 0..8 {
-                val = (val << 8) | (bytes[i] as u64);
+            for byte in bytes.iter().take(8) {
+                val = (val << 8) | (*byte as u64);
             }
             let random_float = (val as f64) / (u64::MAX as f64);
             
@@ -40,7 +40,7 @@ impl RetryPolicy {
             let jitter_amount = (capped_delay as f64 * self.jitter_factor * random_float) as u64;
             
             // Randomly add or subtract the jitter amount
-            if bytes[8] % 2 == 0 {
+            if bytes[8].is_multiple_of(2) {
                 capped_delay.saturating_add(jitter_amount).min(self.max_delay_ms)
             } else {
                 capped_delay.saturating_sub(jitter_amount)

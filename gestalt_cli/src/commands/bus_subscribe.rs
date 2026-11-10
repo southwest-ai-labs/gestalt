@@ -43,6 +43,7 @@ pub fn format_event(event: &BusEvent) -> String {
     format!("{} {} {} {}", time_str, agent_str, type_str, event.summary)
 }
 
+#[allow(dead_code)]
 pub async fn run_subscribe(
     ws_url: &str,
     filter_agent: Option<String>,

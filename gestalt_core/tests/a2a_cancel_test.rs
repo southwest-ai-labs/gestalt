@@ -2,8 +2,7 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 pub use gestalt_core::application;
 
-#[path = "../src/adapters/a2a/mod.rs"]
-mod a2a;
+use gestalt_core::adapters::a2a;
 
 #[tokio::test]
 async fn test_get_task_status_success() {

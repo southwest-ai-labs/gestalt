@@ -76,3 +76,9 @@ impl AcpSessionManager {
         }
     }
 }
+
+impl Default for AcpSessionManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}

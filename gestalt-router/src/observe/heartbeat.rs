@@ -56,7 +56,7 @@ impl AgentHeartbeatReporter {
                 let mut ev = BusEvent::new(
                     &check.provider,
                     "agent_heartbeat",
-                    &format!("Agent {} heartbeat", check.provider),
+                    format!("Agent {} heartbeat", check.provider),
                 );
                 ev.metadata = serde_json::Value::Object(metadata);
                 

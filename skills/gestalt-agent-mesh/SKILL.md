@@ -59,7 +59,8 @@ All events posted to `/api/event` should ideally map to the `AgentEvent` enum (`
     "agent": "your-agent-name",
     "event_type": "tool_invoked",
     "project": "my-repo",
-    "payload": {
+    "summary": "Invoked tool read_file on src/main.rs",
+    "metadata": {
       "tool": "read_file",
       "args": {"path": "src/main.rs"}
     }

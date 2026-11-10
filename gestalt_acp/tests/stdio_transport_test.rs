@@ -10,15 +10,13 @@ async fn test_valid_request() {
 
     let handler = |req: serde_json::Value| async move {
         // Echo back a response modifying the method
-        if let Some(method) = req.get("method").and_then(|m| m.as_str()) {
-            Some(serde_json::json!({
+        req.get("method").and_then(|m| m.as_str()).map(|method| {
+            serde_json::json!({
                 "jsonrpc": "2.0",
                 "result": format!("handled: {}", method),
                 "id": req.get("id").unwrap_or(&serde_json::Value::Null)
-            }))
-        } else {
-            None
-        }
+            })
+        })
     };
 
     let server_task = tokio::spawn(async move {

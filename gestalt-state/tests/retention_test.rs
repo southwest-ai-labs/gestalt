@@ -69,7 +69,7 @@ fn test_retention_policy_by_count() {
     assert_eq!(events.len(), 5, "Should have 5 events left");
 
     // The events kept should be the most recent ones (event-6 to event-10)
-    for i in 0..5 {
-        assert_eq!(events[i].event_type, format!("event-{}", i + 6));
+    for (i, event) in events.iter().enumerate().take(5) {
+        assert_eq!(event.event_type, format!("event-{}", i + 6));
     }
 }
