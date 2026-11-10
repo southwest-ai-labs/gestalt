@@ -11,6 +11,59 @@ use gestalt_core::ports::outbound::search::{LocalSearchEngine, SearchResult};
 use std::sync::Arc;
 use tracing::{info, warn};
 
+/// A search result item for hybrid ranking.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SearchResultItem {
+    pub id: String,
+    pub score: f64,
+}
+
+pub struct HybridRanker;
+
+impl HybridRanker {
+    /// Merges and ranks lexical and vector results using Reciprocal Rank Fusion (RRF).
+    pub fn reciprocal_rank_fusion(
+        lexical_results: Vec<SearchResultItem>,
+        vector_results: Vec<SearchResultItem>,
+        k: f64,
+    ) -> Vec<SearchResultItem> {
+        let mut fused_scores: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+
+        // RRF score computation: score = 1.0 / (k + rank)
+        // Note: rank is 1-indexed (i.e. rank 1 is the best)
+
+        // Process lexical results (assuming input is sorted by rank)
+        for (i, item) in lexical_results.into_iter().enumerate() {
+            let rank = (i + 1) as f64;
+            let score = 1.0 / (k + rank);
+            *fused_scores.entry(item.id).or_insert(0.0) += score;
+        }
+
+        // Process vector results (assuming input is sorted by rank)
+        for (i, item) in vector_results.into_iter().enumerate() {
+            let rank = (i + 1) as f64;
+            let score = 1.0 / (k + rank);
+            *fused_scores.entry(item.id).or_insert(0.0) += score;
+        }
+
+        // Collect and sort
+        let mut results: Vec<SearchResultItem> = fused_scores
+            .into_iter()
+            .map(|(id, score)| SearchResultItem { id, score })
+            .collect();
+
+        // Sort descending by score, and then by id to ensure deterministic sorting for ties
+        results.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.id.cmp(&b.id))
+        });
+
+        results
+    }
+}
+
 /// Search mode preference.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SearchMode {

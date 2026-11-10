@@ -283,7 +283,7 @@ impl LocalSearchEngine for TantivySearchEngine {
 mod hybrid;
 pub mod tag_filter;
 
-pub use hybrid::{HybridSearchEngine, SearchMode};
+pub use hybrid::{HybridRanker, HybridSearchEngine, SearchMode, SearchResultItem};
 
 #[cfg(test)]
 mod tests {
