@@ -16,7 +16,7 @@ serde_json = "1.0"
 tracing = "0.1"
 chrono = { version = "0.4", features = ["serde"] }
 gestalt-state = { path = "../gestalt-state" }
-sha2 = "0.10"
+sha2 = "0.11"
 subtle = "2.6.1"
 axum = "0.8.9"
 
