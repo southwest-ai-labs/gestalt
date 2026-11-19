@@ -1167,14 +1167,14 @@ dependencies = [
 
 [[package]]
 name = "gestalt-merge"
-version = "1.0.0"
+version = "0.2.0"
 dependencies = [
  "thiserror 2.0.18",
 ]
 
 [[package]]
 name = "gestalt-proto"
-version = "1.0.0"
+version = "0.2.0"
 dependencies = [
  "serde",
  "wasm-bindgen",
@@ -1182,7 +1182,7 @@ dependencies = [
 
 [[package]]
 name = "gestalt-router"
-version = "1.0.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1207,7 +1207,7 @@ dependencies = [
 
 [[package]]
 name = "gestalt-search"
-version = "1.0.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1223,7 +1223,7 @@ dependencies = [
 
 [[package]]
 name = "gestalt-state"
-version = "1.0.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1242,7 +1242,7 @@ dependencies = [
 
 [[package]]
 name = "gestalt-wasm"
-version = "1.0.0"
+version = "0.2.0"
 dependencies = [
  "async-trait",
  "gestalt-proto",
@@ -1261,7 +1261,7 @@ dependencies = [
 
 [[package]]
 name = "gestalt-ws"
-version = "1.0.0"
+version = "0.2.0"
 dependencies = [
  "axum",
  "chrono",
@@ -1279,7 +1279,7 @@ dependencies = [
 
 [[package]]
 name = "gestalt_acp"
-version = "1.0.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1304,7 +1304,7 @@ dependencies = [
 
 [[package]]
 name = "gestalt_cli"
-version = "1.0.0"
+version = "0.2.0"
 dependencies = [
  "anstyle-parse",
  "anyhow",
@@ -1345,7 +1345,7 @@ dependencies = [
 
 [[package]]
 name = "gestalt_core"
-version = "1.0.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1381,7 +1381,7 @@ dependencies = [
 
 [[package]]
 name = "gestalt_mcp"
-version = "1.0.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3267,7 +3267,7 @@ dependencies = [
 
 [[package]]
 name = "synapse-agentic"
-version = "1.0.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "async-trait",
