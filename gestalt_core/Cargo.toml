@@ -27,7 +27,7 @@ reqwest = { workspace = true, features = ["stream", "multipart"] }
 oauth2 = "5.0.0"
 
 # Interop
-flutter_rust_bridge = { version = "=2.12.0", optional = true }
+flutter_rust_bridge = { version = "=2.13.0", optional = true }
 
 # Error Handling
 thiserror = { workspace = true }
