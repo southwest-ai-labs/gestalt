@@ -1,9 +1,9 @@
+use gestalt_ws::BusEvent;
+use serde_json::Value;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{BufRead, BufReader, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
-use serde_json::Value;
-use gestalt_ws::BusEvent;
 use tracing::{debug, warn};
 
 /// Specifies the format of the log file being tailed.
@@ -49,7 +49,7 @@ impl ArtifactTailer {
                     return Ok(Vec::new());
                 }
                 return Err(e);
-            }
+            },
         };
 
         let metadata = file.metadata()?;
@@ -59,7 +59,10 @@ impl ArtifactTailer {
 
         // Handle file rotation/truncation
         let offset = if current_size < saved_offset {
-            debug!("File truncated or rotated, resetting offset for {:?}", path_ref);
+            debug!(
+                "File truncated or rotated, resetting offset for {:?}",
+                path_ref
+            );
             0
         } else {
             saved_offset
@@ -84,7 +87,7 @@ impl ArtifactTailer {
                 Err(e) => {
                     warn!("Error reading file {:?}: {}", path_ref, e);
                     break;
-                }
+                },
             };
 
             // Avoid parsing if the line isn't cleanly ending with newline (could be mid-write)
@@ -103,9 +106,12 @@ impl ArtifactTailer {
                     event.metadata = val;
                     // Try extracting more specific info based on format
                     if format == LogFormat::ClaudeJsonl {
-                        if let Some(msg_type) = event.metadata.get("type").and_then(|t| t.as_str()) {
+                        if let Some(msg_type) = event.metadata.get("type").and_then(|t| t.as_str())
+                        {
                             event.event_type = msg_type.to_string();
-                            if let Some(msg) = event.metadata.get("message").and_then(|m| m.as_str()) {
+                            if let Some(msg) =
+                                event.metadata.get("message").and_then(|m| m.as_str())
+                            {
                                 event.summary = msg.to_string();
                             } else {
                                 event.summary = format!("Claude event: {}", msg_type);
@@ -119,7 +125,7 @@ impl ArtifactTailer {
 
                     events.push(event);
                     current_offset += bytes_read as u64;
-                }
+                },
                 Err(e) => {
                     warn!("Failed to parse line from {:?}: {}", path_ref, e);
                     // It might be a truncated line, but we'll skip it and advance anyway to prevent infinite loops on bad lines
@@ -131,7 +137,7 @@ impl ArtifactTailer {
                         break;
                     }
                     current_offset += bytes_read as u64;
-                }
+                },
             }
         }
 

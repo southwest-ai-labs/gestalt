@@ -10,14 +10,23 @@ async fn test_stream_interceptor_single_stream() {
     let (mut writer, reader) = duplex(1024);
 
     let handle = tokio::spawn(async move {
-        writer.write_all(b"chunk 1\nchunk 2\nchunk 3\n").await.unwrap();
+        writer
+            .write_all(b"chunk 1\nchunk 2\nchunk 3\n")
+            .await
+            .unwrap();
         drop(writer);
     });
 
     let mut collected = Vec::new();
-    StreamInterceptor::pipe_stream("stdout", "agent-1", "run-123", reader, |chunk: StreamChunk| {
-        collected.push(chunk);
-    })
+    StreamInterceptor::pipe_stream(
+        "stdout",
+        "agent-1",
+        "run-123",
+        reader,
+        |chunk: StreamChunk| {
+            collected.push(chunk);
+        },
+    )
     .await
     .unwrap();
 
@@ -40,7 +49,10 @@ async fn test_stream_interceptor_concurrent_channel() {
     let (tx, mut rx) = tokio::sync::mpsc::channel(100);
 
     let writer_handle = tokio::spawn(async move {
-        out_w.write_all(b"stdout line 1\nstdout line 2\n").await.unwrap();
+        out_w
+            .write_all(b"stdout line 1\nstdout line 2\n")
+            .await
+            .unwrap();
         err_w.write_all(b"stderr line 1\n").await.unwrap();
         drop(out_w);
         drop(err_w);
@@ -55,7 +67,13 @@ async fn test_stream_interceptor_concurrent_channel() {
     }
 
     assert_eq!(chunks.len(), 3);
-    assert!(chunks.iter().any(|c| c.stream == "stdout" && c.chunk == "stdout line 1"));
-    assert!(chunks.iter().any(|c| c.stream == "stdout" && c.chunk == "stdout line 2"));
-    assert!(chunks.iter().any(|c| c.stream == "stderr" && c.chunk == "stderr line 1"));
+    assert!(chunks
+        .iter()
+        .any(|c| c.stream == "stdout" && c.chunk == "stdout line 1"));
+    assert!(chunks
+        .iter()
+        .any(|c| c.stream == "stdout" && c.chunk == "stdout line 2"));
+    assert!(chunks
+        .iter()
+        .any(|c| c.stream == "stderr" && c.chunk == "stderr line 1"));
 }

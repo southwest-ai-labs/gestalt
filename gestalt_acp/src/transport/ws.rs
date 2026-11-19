@@ -56,14 +56,17 @@ where
         .with_state(state)
 }
 
-async fn ws_handler(ws: WebSocketUpgrade, State(state): State<Arc<AcpWsState>>) -> impl IntoResponse {
+async fn ws_handler(
+    ws: WebSocketUpgrade,
+    State(state): State<Arc<AcpWsState>>,
+) -> impl IntoResponse {
     ws.on_upgrade(move |socket| handle_socket(socket, state))
 }
 
 async fn handle_socket(socket: WebSocket, state: Arc<AcpWsState>) {
     let (mut sender, mut receiver) = socket.split();
     let mut rx = state.tx.subscribe();
-    
+
     // We use an mpsc channel to send messages from the receiver task
     // back to the sender task, avoiding broadcasting responses to all clients.
     let (mpsc_tx, mut mpsc_rx) = tokio::sync::mpsc::channel::<Message>(100);
@@ -108,12 +111,12 @@ async fn handle_socket(socket: WebSocket, state: Arc<AcpWsState>) {
                         Err(_) => continue,
                     };
                     let _ = mpsc_tx.send(Message::Text(response_text.into())).await;
-                }
+                },
                 Message::Ping(data) => {
                     let _ = mpsc_tx.send(Message::Pong(data)).await;
-                }
+                },
                 Message::Close(_) => break,
-                _ => {}
+                _ => {},
             }
         }
     });

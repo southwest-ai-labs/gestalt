@@ -12,6 +12,6 @@ newline_style = "Unix"
 # Trailing commas
 match_block_trailing_comma = true
 
-# Comments
-format_code_in_doc_comments = false
-normalize_comments = false
+# Comments (nightly-only options commented out for stable rustfmt)
+# format_code_in_doc_comments = false
+# normalize_comments = false

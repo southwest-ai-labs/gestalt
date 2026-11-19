@@ -34,7 +34,7 @@ impl LeaseManager {
                 LeaseState::Read(agents) => {
                     agents.insert(agent_id.to_string());
                     true
-                }
+                },
                 LeaseState::Write { expires_at, .. } => {
                     if Instant::now() > *expires_at {
                         let mut agents = HashSet::new();
@@ -44,7 +44,7 @@ impl LeaseManager {
                     } else {
                         false
                     }
-                }
+                },
             }
         } else {
             let mut agents = HashSet::new();
@@ -73,7 +73,7 @@ impl LeaseManager {
                     } else {
                         false
                     }
-                }
+                },
                 LeaseState::Write {
                     expires_at,
                     agent_id: current_agent,
@@ -90,7 +90,7 @@ impl LeaseManager {
                     } else {
                         false
                     }
-                }
+                },
             }
         } else {
             leases.insert(
@@ -115,7 +115,7 @@ impl LeaseManager {
                     if agents.is_empty() {
                         leases.remove(&path_buf);
                     }
-                }
+                },
                 LeaseState::Write {
                     agent_id: current_agent,
                     ..
@@ -123,7 +123,7 @@ impl LeaseManager {
                     if current_agent == agent_id {
                         leases.remove(&path_buf);
                     }
-                }
+                },
             }
         }
     }

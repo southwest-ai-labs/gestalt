@@ -69,7 +69,10 @@ fn test_jsonrpc_error_serialization() {
 
 #[test]
 fn test_jsonrpc_notification_serialization() {
-    let notif = JsonRpcNotification::new("session/cancel".to_string(), Some(json!({"sessionId": "abc"})));
+    let notif = JsonRpcNotification::new(
+        "session/cancel".to_string(),
+        Some(json!({"sessionId": "abc"})),
+    );
 
     let serialized = serde_json::to_string(&notif).unwrap();
     assert!(serialized.contains(r#""jsonrpc":"2.0""#));

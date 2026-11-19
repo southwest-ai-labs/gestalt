@@ -77,7 +77,8 @@ mod tests {
             "hooks": {
                 "session_start": ["other_hook.sh"]
             }
-        }).to_string();
+        })
+        .to_string();
         let merged = merge_hermes_hooks(&existing, "my_hook.sh");
         let parsed: Value = serde_json::from_str(&merged).unwrap();
         let arr_start = parsed["hooks"]["session_start"].as_array().unwrap();
@@ -95,7 +96,8 @@ mod tests {
                 "session_start": ["my_hook.sh"],
                 "session_stop": ["my_hook.sh"]
             }
-        }).to_string();
+        })
+        .to_string();
         let merged = merge_hermes_hooks(&existing, "my_hook.sh");
         let parsed: Value = serde_json::from_str(&merged).unwrap();
         let arr_start = parsed["hooks"]["session_start"].as_array().unwrap();

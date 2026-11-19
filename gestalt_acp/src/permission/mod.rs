@@ -1,8 +1,8 @@
+use dashmap::DashMap;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-use dashmap::DashMap;
-use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use tokio::sync::oneshot;
 use tokio::time::timeout;
@@ -63,16 +63,16 @@ impl PermissionManager {
     ) -> (PermissionRequest, oneshot::Receiver<bool>) {
         let id = Uuid::new_v4().to_string();
         let (tx, rx) = oneshot::channel();
-        
+
         self.pending_requests.insert(id.clone(), tx);
-        
+
         let request = PermissionRequest {
             id,
             scope,
             description,
             status: PermissionStatus::Pending,
         };
-        
+
         (request, rx)
     }
 

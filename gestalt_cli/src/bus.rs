@@ -28,7 +28,6 @@ use axum::{
     routing::{get, post},
     Json, Router,
 };
-use subtle::ConstantTimeEq;
 use gestalt_router::{
     event_bus::{handle_event, BusEvent},
     health::{HealthCache, HealthReport, HealthStatus},
@@ -37,6 +36,7 @@ use gestalt_router::{
 use gestalt_state::StateDb;
 use serde::Deserialize;
 use std::sync::{Arc, OnceLock};
+use subtle::ConstantTimeEq;
 use tracing::{info, warn};
 
 /// Check if a host is loopback (e.g. 127.0.0.1, ::1, localhost)
@@ -82,20 +82,15 @@ pub struct Authenticated;
 /// Bearer-token authentication middleware for protected routes (/api/*, /v1/*).
 /// Unauthenticated requests receive 401 Unauthorized if GESTALT_API_TOKEN is set.
 /// /healthz is left unauthenticated.
-pub async fn auth_middleware(
-    mut req: Request,
-    next: Next,
-) -> axum::response::Response {
+pub async fn auth_middleware(mut req: Request, next: Next) -> axum::response::Response {
     if req.extensions().get::<Authenticated>().is_some() {
         return next.run(req).await;
     }
 
     let path = req.uri().path().to_string();
-    let is_protected = (path.starts_with("/api/")
-        || path == "/api"
-        || path.starts_with("/v1/")
-        || path == "/v1")
-        && path != "/healthz";
+    let is_protected =
+        (path.starts_with("/api/") || path == "/api" || path.starts_with("/v1/") || path == "/v1")
+            && path != "/healthz";
 
     if is_protected {
         if let Ok(expected_token) = std::env::var("GESTALT_API_TOKEN") {
@@ -104,7 +99,10 @@ pub async fn auth_middleware(
                 let auth_header = req.headers().get(axum::http::header::AUTHORIZATION);
                 let is_valid = if let Some(val) = auth_header.and_then(|v| v.to_str().ok()) {
                     let val = val.trim();
-                    if let Some(token) = val.strip_prefix("Bearer ").or_else(|| val.strip_prefix("bearer ")) {
+                    if let Some(token) = val
+                        .strip_prefix("Bearer ")
+                        .or_else(|| val.strip_prefix("bearer "))
+                    {
                         constant_time_eq_str(token.trim(), expected_token)
                     } else {
                         false

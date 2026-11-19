@@ -80,18 +80,18 @@ impl OrcaBridgeReceiver {
                                 let mut buf_reader = BufReader::new(&mut stream);
                                 let mut content_length = 0;
                                 let mut line = String::new();
-                                
+
                                 loop {
                                     line.clear();
                                     if buf_reader.read_line(&mut line).await.unwrap_or(0) == 0 {
                                         break; // EOF
                                     }
-                                    
+
                                     // Empty line indicates end of headers
                                     if line == "\r\n" || line == "\n" {
                                         break;
                                     }
-                                    
+
                                     let lower_line = line.to_lowercase();
                                     if lower_line.starts_with("content-length:") {
                                         if let Some(val_str) = lower_line.strip_prefix("content-length:") {
@@ -109,7 +109,7 @@ impl OrcaBridgeReceiver {
                                             } else {
                                                 &raw_str
                                             };
-                                            
+
                                             match parse_orca_event(json_body) {
                                                 Ok(bus_event) => {
                                                     if let Err(e) = persist_event(&db_clone, &bus_event) {
@@ -122,7 +122,7 @@ impl OrcaBridgeReceiver {
                                             }
                                         }
                                     }
-                                    
+
                                     // Send 200 OK so standard HTTP clients don't hang
                                     let _ = stream.write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n").await;
                                 } else {
@@ -135,7 +135,7 @@ impl OrcaBridgeReceiver {
                                             } else {
                                                 &raw_str
                                             };
-                                            
+
                                             if let Ok(bus_event) = parse_orca_event(json_body) {
                                                 let _ = persist_event(&db_clone, &bus_event);
                                             }

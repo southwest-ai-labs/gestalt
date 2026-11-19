@@ -1,8 +1,6 @@
 #![allow(unsafe_code)]
 
-use gestalt_mcp::tools::run_stream::{
-    GestaltRunStreamHandler, FORBIDDEN_METACHARS,
-};
+use gestalt_mcp::tools::run_stream::{GestaltRunStreamHandler, FORBIDDEN_METACHARS};
 use mcp_protocol_sdk::core::tool::ToolHandler;
 use mcp_protocol_sdk::protocol::types::{CallToolResult, ContentBlock};
 use serde_json::json;
@@ -77,7 +75,11 @@ async fn test_disallowed_binary_rejection() {
         let mut args = HashMap::new();
         args.insert("command".to_string(), json!(format!("{} foo", bin)));
         let result = handler.call(args).await.unwrap();
-        assert!(result.is_error.unwrap_or(false), "Expected {} to be rejected", bin);
+        assert!(
+            result.is_error.unwrap_or(false),
+            "Expected {} to be rejected",
+            bin
+        );
     }
 }
 
@@ -166,7 +168,10 @@ async fn test_path_traversal_cwd_rejection() {
     // Nonexistent directory traversal
     let mut args = HashMap::new();
     args.insert("command".to_string(), json!("echo Hello"));
-    args.insert("cwd".to_string(), json!("does_not_exist_traversal/../../.."));
+    args.insert(
+        "cwd".to_string(),
+        json!("does_not_exist_traversal/../../.."),
+    );
     let result = handler.call(args).await.unwrap();
     assert!(result.is_error.unwrap_or(false));
 }
@@ -179,7 +184,10 @@ async fn test_timeout_enforcement() {
 
     // Allow 'sleep' for the purpose of timeout test
     unsafe {
-        std::env::set_var("GESTALT_ALLOWED_COMMANDS", "echo,git,cargo,ls,cat,grep,diff,sleep");
+        std::env::set_var(
+            "GESTALT_ALLOWED_COMMANDS",
+            "echo,git,cargo,ls,cat,grep,diff,sleep",
+        );
         std::env::set_var("GESTALT_COMMAND_TIMEOUT_SECS", "1");
     }
 
@@ -232,7 +240,10 @@ async fn test_safe_allowlisted_command_success() {
     // 2. Structured arguments execution
     let mut args = HashMap::new();
     args.insert("program".to_string(), json!("echo"));
-    args.insert("args".to_string(), json!(["Structured", "Execution", "Works"]));
+    args.insert(
+        "args".to_string(),
+        json!(["Structured", "Execution", "Works"]),
+    );
     let result = handler.call(args).await.unwrap();
     assert!(!result.is_error.unwrap_or(true));
     let text = get_result_text(&result);
@@ -268,7 +279,13 @@ async fn test_output_byte_cap_truncation() {
     }
     tmp.flush().unwrap();
 
-    let path_str = tmp.path().file_name().unwrap().to_str().unwrap().to_string();
+    let path_str = tmp
+        .path()
+        .file_name()
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .to_string();
 
     let mut args = HashMap::new();
     args.insert("command".to_string(), json!(format!("cat {}", path_str)));

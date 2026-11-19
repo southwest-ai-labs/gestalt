@@ -8,4 +8,4 @@ pub use agent_card::{AgentCard, AGENT_JSON_PATH};
 pub use cancel::cancel_task_handler;
 pub use client::{A2aClient, A2aError, TaskResponse};
 pub use status::get_task_status;
-pub use types::TaskPayload;
+pub use types::{A2aTaskError, TaskPayload};

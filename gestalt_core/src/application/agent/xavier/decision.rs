@@ -32,7 +32,7 @@ impl DecisionPromoter {
         rationale: &str,
     ) -> Result<String, CoreError> {
         let timestamp = chrono::Utc::now().to_rfc3339();
-        
+
         let record = DecisionRecord {
             title: title.to_string(),
             rationale: rationale.to_string(),
@@ -42,12 +42,18 @@ impl DecisionPromoter {
             timestamp,
         };
 
-        let metadata = serde_json::to_value(&record)
-            .map_err(|e| CoreError::Internal(format!("Failed to serialize decision metadata: {}", e)))?;
-        
-        let decision_text = format!("# Decision: {}\n\n## Rationale\n{}\n\n**Status**: {:?}\n**Insight ID**: {}", record.title, record.rationale, record.status, record.insight_id);
+        let metadata = serde_json::to_value(&record).map_err(|e| {
+            CoreError::Internal(format!("Failed to serialize decision metadata: {}", e))
+        })?;
 
-        let id = client.archive_decision(&decision_text, metadata).await
+        let decision_text = format!(
+            "# Decision: {}\n\n## Rationale\n{}\n\n**Status**: {:?}\n**Insight ID**: {}",
+            record.title, record.rationale, record.status, record.insight_id
+        );
+
+        let id = client
+            .archive_decision(&decision_text, metadata)
+            .await
             .map_err(|e| CoreError::Agent(format!("Failed to archive decision: {}", e)))?;
 
         Ok(id)
@@ -58,9 +64,11 @@ impl DecisionPromoter {
         topic: &str,
     ) -> Result<Vec<DecisionRecord>, CoreError> {
         let query = format!("decision topic: {}", topic);
-        let resp = client.search(&query, 50, "hybrid").await
+        let resp = client
+            .search(&query, 50, "hybrid")
+            .await
             .map_err(|e| CoreError::Agent(format!("Failed to search decisions by topic: {}", e)))?;
-        
+
         let mut results = Vec::new();
         for r in resp.results {
             if r.path.starts_with("gestalt/decision/") {
@@ -80,9 +88,11 @@ impl DecisionPromoter {
         tag: &str,
     ) -> Result<Vec<DecisionRecord>, CoreError> {
         let query = format!("decision tag: {}", tag);
-        let resp = client.search(&query, 50, "hybrid").await
+        let resp = client
+            .search(&query, 50, "hybrid")
+            .await
             .map_err(|e| CoreError::Agent(format!("Failed to search decisions by tag: {}", e)))?;
-        
+
         let mut results = Vec::new();
         for r in resp.results {
             if r.path.starts_with("gestalt/decision/") {

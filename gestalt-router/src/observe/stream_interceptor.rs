@@ -57,7 +57,8 @@ impl StreamInterceptor {
             tasks.push(tokio::spawn(async move {
                 let _ = Self::pipe_stream("stdout", &aid, &rid, out, move |c| {
                     let _ = tx_out.try_send(c);
-                }).await;
+                })
+                .await;
             }));
         }
 
@@ -68,7 +69,8 @@ impl StreamInterceptor {
             tasks.push(tokio::spawn(async move {
                 let _ = Self::pipe_stream("stderr", &aid, &rid, err, move |c| {
                     let _ = tx_err.try_send(c);
-                }).await;
+                })
+                .await;
             }));
         }
 

@@ -56,7 +56,9 @@ async fn test_it_detects_conflicts_and_rolls_back() {
             .output()
             .unwrap()
             .stdout,
-    ).trim().to_string();
+    )
+    .trim()
+    .to_string();
 
     // Create synthetic branch 2
     Command::new("git")
@@ -82,17 +84,16 @@ async fn test_it_detects_conflicts_and_rolls_back() {
             .output()
             .unwrap()
             .stdout,
-    ).trim().to_string();
+    )
+    .trim()
+    .to_string();
     Command::new("git")
         .args(["checkout", "main"])
         .current_dir(&repo_path)
         .status()
         .unwrap();
 
-    let integrate_branches = vec![
-        ("agent-1".to_string(), sha1),
-        ("agent-2".to_string(), sha2),
-    ];
+    let integrate_branches = vec![("agent-1".to_string(), sha1), ("agent-2".to_string(), sha2)];
 
     let base_sha = String::from_utf8_lossy(
         &Command::new("git")
@@ -101,23 +102,33 @@ async fn test_it_detects_conflicts_and_rolls_back() {
             .output()
             .unwrap()
             .stdout,
-    ).trim().to_string();
+    )
+    .trim()
+    .to_string();
 
     let result = gestalt_router::integrate::integrate_branches(
         &repo_path,
         &base_sha,
         &format!("integration-{}", run_id),
         &integrate_branches,
-    ).await.unwrap();
+    )
+    .await
+    .unwrap();
 
-    assert!(result.merge_sha.is_empty(), "Should not successfully merge due to conflict");
+    assert!(
+        result.merge_sha.is_empty(),
+        "Should not successfully merge due to conflict"
+    );
     assert!(!result.conflicts.is_empty(), "Should detect conflicts");
-    
+
     // Check if worktree is dirty
     let status = Command::new("git")
         .args(["status", "--porcelain"])
         .current_dir(&repo_path)
         .output()
         .unwrap();
-    assert!(status.stdout.is_empty(), "Worktree should be clean after failed merge and rollback");
+    assert!(
+        status.stdout.is_empty(),
+        "Worktree should be clean after failed merge and rollback"
+    );
 }

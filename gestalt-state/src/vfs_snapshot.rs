@@ -106,10 +106,12 @@ impl VfsSnapshotManager {
             let mut stmt = tx
                 .prepare("SELECT path FROM vfs_snapshot_files WHERE snapshot_id = ?1")
                 .map_err(StateDbError::DbError)?;
-            
+
             let mut paths: Vec<String> = Vec::new();
             {
-                let mut rows = stmt.query(rusqlite::params![snapshot_id]).map_err(StateDbError::DbError)?;
+                let mut rows = stmt
+                    .query(rusqlite::params![snapshot_id])
+                    .map_err(StateDbError::DbError)?;
                 while let Some(row) = rows.next().map_err(StateDbError::DbError)? {
                     let path: String = row.get(0).map_err(StateDbError::DbError)?;
                     paths.push(path);

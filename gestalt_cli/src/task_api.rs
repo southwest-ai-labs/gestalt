@@ -127,7 +127,10 @@ pub struct TaskRequest {
 pub fn router() -> Router<BusState> {
     Router::new()
         .route("/api/task", post(handle_task_http))
-        .route("/api/admin/status", get(crate::admin_telemetry::handle_admin_status))
+        .route(
+            "/api/admin/status",
+            get(crate::admin_telemetry::handle_admin_status),
+        )
         .merge(crate::xavier_plugin::router())
         .layer(middleware::from_fn(crate::bus::auth_middleware))
         .layer(axum::extract::DefaultBodyLimit::max(2 * 1024 * 1024))

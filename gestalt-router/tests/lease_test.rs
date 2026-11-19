@@ -68,26 +68,26 @@ fn test_read_write_conflict() {
 fn test_write_ttl_expiration() {
     let manager = LeaseManager::new();
     let path = PathBuf::from("/tmp/test.txt");
-    
+
     // Agent1 acquires short-lived write lock
     let ttl = Duration::from_millis(10);
     assert!(manager.acquire_write(&path, "agent1", ttl));
-    
+
     // Agent2 fails to acquire immediately
     assert!(!manager.acquire_write(&path, "agent2", Duration::from_secs(1)));
-    
+
     // Wait for TTL to expire
     thread::sleep(Duration::from_millis(20));
-    
+
     // Agent2 should now be able to acquire the write lock
     assert!(manager.acquire_write(&path, "agent2", Duration::from_secs(1)));
-    
+
     // Let's also check read lock after expiration
     manager.release(&path, "agent2"); // Need to release first for next test phase
-    
+
     assert!(manager.acquire_write(&path, "agent3", Duration::from_millis(10)));
     thread::sleep(Duration::from_millis(20));
-    
+
     // Agent4 should be able to read after Agent3's write lock expires
     assert!(manager.acquire_read(&path, "agent4"));
 }

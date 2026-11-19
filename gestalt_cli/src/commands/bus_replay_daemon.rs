@@ -1,10 +1,10 @@
 use std::sync::Arc;
 use tokio::time::{interval, Duration};
 use tokio_util::sync::CancellationToken;
-use tracing::{info, error};
+use tracing::{error, info};
 
-use gestalt_state::StateDb;
 use gestalt_router::xavier_sink::XavierEventSink;
+use gestalt_state::StateDb;
 
 /// The cursor key used in the StateDb metadata table to store the last synced sequence number.
 const REPLAY_CURSOR_KEY: &str = "xavier_replay_cursor";
@@ -65,15 +65,22 @@ impl ReplaySyncDaemon {
     }
 
     /// Syncs a single batch of events and updates the cursor.
-    pub async fn sync_batch(&self, db: &StateDb, sink: &XavierEventSink, limit: usize) -> Result<usize, String> {
+    pub async fn sync_batch(
+        &self,
+        db: &StateDb,
+        sink: &XavierEventSink,
+        limit: usize,
+    ) -> Result<usize, String> {
         // Read cursor
-        let cursor_str = db.get_metadata(REPLAY_CURSOR_KEY)
+        let cursor_str = db
+            .get_metadata(REPLAY_CURSOR_KEY)
             .map_err(|e| format!("Failed to read cursor: {}", e))?;
-        
+
         let cursor: Option<i64> = cursor_str.and_then(|s| s.parse().ok());
 
         // Fetch un-synced events
-        let events = db.query_timeline(None, None, None, cursor, limit as i64)
+        let events = db
+            .query_timeline(None, None, None, cursor, limit as i64)
             .map_err(|e| format!("Failed to query timeline: {}", e))?;
 
         if events.is_empty() {

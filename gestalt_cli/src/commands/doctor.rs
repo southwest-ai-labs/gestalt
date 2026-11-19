@@ -68,10 +68,7 @@ pub async fn run_doctor() {
 
     // 4. Bus Serve Reachability Check
     use std::net::TcpStream;
-    match TcpStream::connect_timeout(
-        &"127.0.0.1:8081".parse().unwrap(),
-        Duration::from_secs(2),
-    ) {
+    match TcpStream::connect_timeout(&"127.0.0.1:8081".parse().unwrap(), Duration::from_secs(2)) {
         Ok(_) => {
             println!("✅ Bus serve reachability: Reachable (port 8081)");
         },
@@ -87,11 +84,14 @@ pub async fn run_doctor() {
         if nix_check.missing_vars.is_empty() {
             println!("✅ NixOS environment: Ready (required build vars are set)");
         } else {
-            println!("❌ NixOS environment: Missing required variables: {}", nix_check.missing_vars.join(", "));
+            println!(
+                "❌ NixOS environment: Missing required variables: {}",
+                nix_check.missing_vars.join(", ")
+            );
             println!("   Hint: Enter the devShell via `nix-shell` or `direnv allow` to populate OpenSSL and pkg-config variables.");
             all_healthy = false;
         }
-        
+
         if nix_check.dev_shell_active {
             println!("✅ Nix devShell: Active");
         } else {
@@ -104,7 +104,9 @@ pub async fn run_doctor() {
         println!("Verdict: Healthy! All environment components are fully operational.");
         std::process::exit(0);
     } else {
-        println!("Verdict: Unhealthy! Some environment checks failed. Please review the ❌ items above.");
+        println!(
+            "Verdict: Unhealthy! Some environment checks failed. Please review the ❌ items above."
+        );
         std::process::exit(1);
     }
 }

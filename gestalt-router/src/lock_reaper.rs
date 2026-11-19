@@ -56,12 +56,15 @@ impl LockReaper {
 
     /// Synchronously reap expired locks or locks held by dead agents.
     pub fn reap_expired_locks(db: &StateDb, ttl: Duration) -> Result<usize, String> {
-        let locks = db.get_locks().map_err(|e| format!("Failed to get locks: {}", e))?;
+        let locks = db
+            .get_locks()
+            .map_err(|e| format!("Failed to get locks: {}", e))?;
         let now = chrono::Utc::now();
         let mut reaped_count = 0;
 
         for lock in locks {
-            let is_expired = now.signed_duration_since(lock.acquired_at).num_seconds() > ttl.as_secs() as i64;
+            let is_expired =
+                now.signed_duration_since(lock.acquired_at).num_seconds() > ttl.as_secs() as i64;
             let mut is_dead = false;
 
             if !is_expired {
@@ -72,14 +75,17 @@ impl LockReaper {
                         if state != "running" && state != "pending" {
                             is_dead = true;
                         }
-                    }
+                    },
                     Ok(None) => {
                         // Agent record is missing, consider dead
                         is_dead = true;
-                    }
+                    },
                     Err(e) => {
-                        warn!("Failed to get agent {} for lock on {}: {}", lock.agent_id, lock.path, e);
-                    }
+                        warn!(
+                            "Failed to get agent {} for lock on {}: {}",
+                            lock.agent_id, lock.path, e
+                        );
+                    },
                 }
             }
 
@@ -91,7 +97,7 @@ impl LockReaper {
                 reaped_count += 1;
 
                 let reason = if is_expired { "expired" } else { "dead_agent" };
-                
+
                 let ev = BusEvent::new(
                     "router",
                     "lock_evicted",

@@ -1,6 +1,6 @@
+use crate::bus::BusState;
 use axum::{extract::State, response::IntoResponse, Json};
 use serde::{Deserialize, Serialize};
-use crate::bus::BusState;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MemoryStats {
@@ -27,15 +27,21 @@ pub struct AdminStatusResponse {
     pub throughput: ThroughputStats,
 }
 
-pub async fn handle_admin_status(
-    State(state): State<BusState>,
-) -> impl IntoResponse {
+pub async fn handle_admin_status(State(state): State<BusState>) -> impl IntoResponse {
     let metrics = state.db.metrics();
     let throughput = ThroughputStats {
-        write_count: metrics.write_count.load(std::sync::atomic::Ordering::Relaxed),
-        write_latency_ms: metrics.write_latency_ms.load(std::sync::atomic::Ordering::Relaxed),
-        conflict_count: metrics.conflict_count.load(std::sync::atomic::Ordering::Relaxed),
-        retry_count: metrics.retry_count.load(std::sync::atomic::Ordering::Relaxed),
+        write_count: metrics
+            .write_count
+            .load(std::sync::atomic::Ordering::Relaxed),
+        write_latency_ms: metrics
+            .write_latency_ms
+            .load(std::sync::atomic::Ordering::Relaxed),
+        conflict_count: metrics
+            .conflict_count
+            .load(std::sync::atomic::Ordering::Relaxed),
+        retry_count: metrics
+            .retry_count
+            .load(std::sync::atomic::Ordering::Relaxed),
     };
 
     let active_worktrees = crate::task_api::active_runs_count();

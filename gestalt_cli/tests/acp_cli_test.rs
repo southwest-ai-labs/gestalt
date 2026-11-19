@@ -17,7 +17,16 @@ fn test_acp_serve_help() {
 #[test]
 fn test_acp_serve_stdio_help() {
     let output = Command::new("cargo")
-        .args(["run", "-p", "gestalt_cli", "--", "acp", "serve", "--stdio", "--help"])
+        .args([
+            "run",
+            "-p",
+            "gestalt_cli",
+            "--",
+            "acp",
+            "serve",
+            "--stdio",
+            "--help",
+        ])
         .output()
         .expect("Failed to execute command");
 
@@ -29,7 +38,17 @@ fn test_acp_serve_stdio_help() {
 #[test]
 fn test_acp_serve_port_help() {
     let output = Command::new("cargo")
-        .args(["run", "-p", "gestalt_cli", "--", "acp", "serve", "--port", "8085", "--help"])
+        .args([
+            "run",
+            "-p",
+            "gestalt_cli",
+            "--",
+            "acp",
+            "serve",
+            "--port",
+            "8085",
+            "--help",
+        ])
         .output()
         .expect("Failed to execute command");
 

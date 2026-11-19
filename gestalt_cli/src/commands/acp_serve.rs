@@ -74,7 +74,10 @@ pub(crate) fn evaluate_exit_status(
         Some(status) => {
             if !status.success() {
                 #[cfg(unix)]
-                let exit_desc = match (status.code(), std::os::unix::process::ExitStatusExt::signal(&status)) {
+                let exit_desc = match (
+                    status.code(),
+                    std::os::unix::process::ExitStatusExt::signal(&status),
+                ) {
                     (Some(code), _) => format!("exit code {code}"),
                     (None, Some(sig)) => format!("signal {sig}"),
                     (None, None) => "unknown termination reason".to_string(),
@@ -86,14 +89,16 @@ pub(crate) fn evaluate_exit_status(
                 };
 
                 error!("ACP server exited with error ({exit_desc})");
-                return Err(anyhow::anyhow!("ACP server exited with error ({exit_desc})"));
+                return Err(anyhow::anyhow!(
+                    "ACP server exited with error ({exit_desc})"
+                ));
             }
             Ok(())
-        }
+        },
         None => {
             shutdown.record_cancelled(1);
             Ok(())
-        }
+        },
     }
 }
 
@@ -129,7 +134,8 @@ pub(crate) async fn serve_with_command(
 
     let mut child = cmd.spawn()?;
 
-    let wait_res = crate::wait_for_child_or_shutdown(&mut child, shutdown, "standalone ACP server").await?;
+    let wait_res =
+        crate::wait_for_child_or_shutdown(&mut child, shutdown, "standalone ACP server").await?;
     evaluate_exit_status(wait_res, shutdown)
 }
 
@@ -247,7 +253,10 @@ mod tests {
 
         let shutdown = crate::shutdown::ShutdownCoordinator::default();
         let result = serve_with_command(false, Some(9099), &shutdown, script_path).await;
-        assert!(result.is_err(), "expected serve_with_command to fail on non-zero exit code");
+        assert!(
+            result.is_err(),
+            "expected serve_with_command to fail on non-zero exit code"
+        );
         let err_msg = result.unwrap_err().to_string();
         assert!(
             err_msg.contains("exit code 42"),

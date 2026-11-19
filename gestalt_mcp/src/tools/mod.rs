@@ -1172,6 +1172,5 @@ pub async fn register_standard_tools(server: &McpServer) -> anyhow::Result<()> {
         )
         .await?;
 
-
     Ok(())
 }

@@ -29,7 +29,7 @@ pub fn discover_installed_clis() -> Vec<DiscoveredAgent> {
                     let version = match Command::new(&exe_path).arg("--version").output() {
                         Ok(output) if output.status.success() => {
                             String::from_utf8_lossy(&output.stdout).trim().to_string()
-                        }
+                        },
                         _ => "unknown".to_string(),
                     };
 

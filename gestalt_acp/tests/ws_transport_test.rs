@@ -1,12 +1,12 @@
 use axum::serve;
+use futures::{SinkExt, StreamExt};
 use gestalt_acp::session::manager::AcpSessionManager;
 use gestalt_acp::transport::ws::AcpWsTransport;
+use serde_json::json;
 use std::sync::Arc;
 use tokio::net::TcpListener;
 use tokio_tungstenite::connect_async;
 use tokio_tungstenite::tungstenite::Message;
-use futures::{SinkExt, StreamExt};
-use serde_json::json;
 
 #[tokio::test]
 async fn test_ws_transport() {
@@ -31,7 +31,10 @@ async fn test_ws_transport() {
         "method": "initialize",
         "params": {}
     });
-    ws_stream.send(Message::Text(init_req.to_string().into())).await.unwrap();
+    ws_stream
+        .send(Message::Text(init_req.to_string().into()))
+        .await
+        .unwrap();
 
     let msg = ws_stream.next().await.unwrap().unwrap();
     if let Message::Text(text) = msg {
@@ -49,7 +52,10 @@ async fn test_ws_transport() {
         "method": "session/new",
         "params": {}
     });
-    ws_stream.send(Message::Text(session_req.to_string().into())).await.unwrap();
+    ws_stream
+        .send(Message::Text(session_req.to_string().into()))
+        .await
+        .unwrap();
 
     let msg = ws_stream.next().await.unwrap().unwrap();
     if let Message::Text(text) = msg {

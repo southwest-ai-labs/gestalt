@@ -64,7 +64,10 @@ fn test_observe_hook_payload_roundtrip_with_special_characters() {
         let response = "HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\nOK";
         let _ = stream.write_all(response.as_bytes());
 
-        (request_str, String::from_utf8(body).expect("Valid UTF-8 body"))
+        (
+            request_str,
+            String::from_utf8(body).expect("Valid UTF-8 body"),
+        )
     });
 
     // Run the hook script
@@ -91,7 +94,9 @@ fn test_observe_hook_payload_roundtrip_with_special_characters() {
         headers
     );
     assert!(
-        headers.to_lowercase().contains("content-type: application/json"),
+        headers
+            .to_lowercase()
+            .contains("content-type: application/json"),
         "Missing or incorrect Content-Type header: {}",
         headers
     );
@@ -190,7 +195,8 @@ fn test_build_hook_script_hardening_with_special_characters() {
     let malicious_event = "event\"} break {\"evil\": 1}";
     let malicious_summary = "summary\nwith\nnewlines and \"quotes\" and \\backslash\\";
 
-    let generated_script = inject::build_hook_script(malicious_agent, malicious_event, malicious_summary);
+    let generated_script =
+        inject::build_hook_script(malicious_agent, malicious_event, malicious_summary);
 
     // Mock HTTP server
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind ephemeral TCP port");
@@ -224,7 +230,10 @@ fn test_build_hook_script_hardening_with_special_characters() {
         .status()
         .expect("Failed to execute generated script");
 
-    assert!(status.success(), "Generated script should execute successfully");
+    assert!(
+        status.success(),
+        "Generated script should execute successfully"
+    );
 
     let body = server_handle.join().unwrap();
     let parsed: serde_json::Value = serde_json::from_str(&body)
@@ -242,7 +251,9 @@ fn test_observe_hook_python_fallback_roundtrip() {
     let bin_path = temp_bin_dir.path();
 
     // Symlink essential posix utilities + python3/python, but OMIT jq
-    for cmd in ["sh", "curl", "python3", "python", "cat", "printf", "test", "["] {
+    for cmd in [
+        "sh", "curl", "python3", "python", "cat", "printf", "test", "[",
+    ] {
         if let Ok(output) = Command::new("which").arg(cmd).output() {
             let path_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
             if !path_str.is_empty() {
@@ -288,11 +299,18 @@ fn test_observe_hook_python_fallback_roundtrip() {
 
     assert!(status.success());
     let body = server_handle.join().unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&body)
-        .unwrap_or_else(|e| panic!("Failed to parse body JSON in python fallback: {}\nBody: {}", e, body));
+    let parsed: serde_json::Value = serde_json::from_str(&body).unwrap_or_else(|e| {
+        panic!(
+            "Failed to parse body JSON in python fallback: {}\nBody: {}",
+            e, body
+        )
+    });
 
     assert_eq!(parsed["agent"].as_str().unwrap(), "agent\"with\"quotes");
-    assert_eq!(parsed["event_type"].as_str().unwrap(), "event\\with\\backslashes");
+    assert_eq!(
+        parsed["event_type"].as_str().unwrap(),
+        "event\\with\\backslashes"
+    );
     assert_eq!(parsed["summary"].as_str().unwrap(), complex_summary);
 }
 
@@ -350,10 +368,17 @@ fn test_observe_hook_posix_fallback_roundtrip() {
 
     assert!(status.success());
     let body = server_handle.join().unwrap();
-    let parsed: serde_json::Value = serde_json::from_str(&body)
-        .unwrap_or_else(|e| panic!("Failed to parse body JSON in fallback: {}\nBody: {}", e, body));
+    let parsed: serde_json::Value = serde_json::from_str(&body).unwrap_or_else(|e| {
+        panic!(
+            "Failed to parse body JSON in fallback: {}\nBody: {}",
+            e, body
+        )
+    });
 
     assert_eq!(parsed["agent"].as_str().unwrap(), "agent\"with\"quotes");
-    assert_eq!(parsed["event_type"].as_str().unwrap(), "event\\with\\backslashes");
+    assert_eq!(
+        parsed["event_type"].as_str().unwrap(),
+        "event\\with\\backslashes"
+    );
     assert_eq!(parsed["summary"].as_str().unwrap(), complex_summary);
 }

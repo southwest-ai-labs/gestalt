@@ -1,3 +1,4 @@
+pub use crate::application::a2a::dispatcher::A2aTaskError;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]

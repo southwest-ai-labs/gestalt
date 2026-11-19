@@ -27,7 +27,8 @@ impl HybridRanker {
         vector_results: Vec<SearchResultItem>,
         k: f64,
     ) -> Vec<SearchResultItem> {
-        let mut fused_scores: std::collections::HashMap<String, f64> = std::collections::HashMap::new();
+        let mut fused_scores: std::collections::HashMap<String, f64> =
+            std::collections::HashMap::new();
 
         // RRF score computation: score = 1.0 / (k + rank)
         // Note: rank is 1-indexed (i.e. rank 1 is the best)

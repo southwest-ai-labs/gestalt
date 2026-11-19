@@ -1,4 +1,4 @@
-use gestalt_acp::permission::{PermissionManager, PermissionScope, PermissionError};
+use gestalt_acp::permission::{PermissionError, PermissionManager, PermissionScope};
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -65,7 +65,7 @@ async fn test_permission_timeout() {
 
     assert!(result.is_err());
     match result.unwrap_err() {
-        PermissionError::Timeout => {} // Expected
+        PermissionError::Timeout => {}, // Expected
         _ => panic!("Expected timeout error"),
     }
 }

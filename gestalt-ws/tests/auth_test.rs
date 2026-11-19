@@ -1,10 +1,4 @@
-use axum::{
-    body::Body,
-    extract::Request,
-    http::StatusCode,
-    routing::get,
-    Router,
-};
+use axum::{body::Body, extract::Request, http::StatusCode, routing::get, Router};
 use gestalt_ws::auth::{TokenValidator, ValidateAuth};
 use std::env;
 use tokio::sync::Mutex;
@@ -24,7 +18,7 @@ fn app() -> Router {
 async fn test_auth_bypassed_when_token_unset() {
     let _lock = TEST_MUTEX.lock().await;
     env::remove_var("GESTALT_BUS_TOKEN");
-    
+
     let response = app()
         .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
         .await
@@ -37,7 +31,7 @@ async fn test_auth_bypassed_when_token_unset() {
 async fn test_auth_rejected_when_token_configured_but_missing() {
     let _lock = TEST_MUTEX.lock().await;
     env::set_var("GESTALT_BUS_TOKEN", "secret-token");
-    
+
     let response = app()
         .oneshot(Request::builder().uri("/").body(Body::empty()).unwrap())
         .await
@@ -50,7 +44,7 @@ async fn test_auth_rejected_when_token_configured_but_missing() {
 async fn test_auth_accepted_with_valid_bearer_token() {
     let _lock = TEST_MUTEX.lock().await;
     env::set_var("GESTALT_BUS_TOKEN", "secret-token");
-    
+
     let response = app()
         .oneshot(
             Request::builder()
@@ -69,7 +63,7 @@ async fn test_auth_accepted_with_valid_bearer_token() {
 async fn test_auth_accepted_with_valid_query_token() {
     let _lock = TEST_MUTEX.lock().await;
     env::set_var("GESTALT_BUS_TOKEN", "secret-token");
-    
+
     let response = app()
         .oneshot(
             Request::builder()
@@ -87,7 +81,7 @@ async fn test_auth_accepted_with_valid_query_token() {
 async fn test_auth_rejected_with_invalid_token() {
     let _lock = TEST_MUTEX.lock().await;
     env::set_var("GESTALT_BUS_TOKEN", "secret-token");
-    
+
     let response = app()
         .oneshot(
             Request::builder()

@@ -52,24 +52,26 @@ impl StateDb {
     /// Checkpoint the WAL file for the database.
     pub fn checkpoint_wal(&self, mode: CheckpointMode) -> Result<CheckpointResult, StateDbError> {
         let conn = self.conn().map_err(|_| StateDbError::LockPoisoned)?;
-        
+
         let pragma = format!("PRAGMA wal_checkpoint({});", mode);
         let mut stmt = conn.prepare(&pragma)?;
-        
+
         let mut rows = stmt.query([])?;
-        
+
         if let Some(row) = rows.next()? {
             let is_blocked_int: i32 = row.get(0)?;
             let wal_size: i32 = row.get(1)?;
             let checkpointed_size: i32 = row.get(2)?;
-            
+
             return Ok(CheckpointResult {
                 is_blocked: is_blocked_int != 0,
                 wal_size,
                 checkpointed_size,
             });
         }
-        
-        Err(StateDbError::SqliteError(rusqlite::Error::QueryReturnedNoRows))
+
+        Err(StateDbError::SqliteError(
+            rusqlite::Error::QueryReturnedNoRows,
+        ))
     }
 }

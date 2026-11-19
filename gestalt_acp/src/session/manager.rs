@@ -1,8 +1,8 @@
 use dashmap::DashMap;
 use std::sync::Arc;
+use thiserror::Error;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
-use thiserror::Error;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum SessionState {
@@ -58,11 +58,17 @@ impl AcpSessionManager {
         id
     }
 
-    pub fn get_session(&self, id: &str) -> Option<dashmap::mapref::one::Ref<'_, String, AcpSession>> {
+    pub fn get_session(
+        &self,
+        id: &str,
+    ) -> Option<dashmap::mapref::one::Ref<'_, String, AcpSession>> {
         self.sessions.get(id)
     }
 
-    pub fn get_session_mut(&self, id: &str) -> Option<dashmap::mapref::one::RefMut<'_, String, AcpSession>> {
+    pub fn get_session_mut(
+        &self,
+        id: &str,
+    ) -> Option<dashmap::mapref::one::RefMut<'_, String, AcpSession>> {
         self.sessions.get_mut(id)
     }
 

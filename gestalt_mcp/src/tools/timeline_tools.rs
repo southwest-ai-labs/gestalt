@@ -17,16 +17,10 @@ impl ToolHandler for GestaltTimelineQueryHandler {
             .get("limit")
             .and_then(|v| v.as_u64())
             .unwrap_or(10) as i64;
-        let agent = arguments
-            .get("agent")
-            .and_then(|v| v.as_str());
-        let event_type = arguments
-            .get("event_type")
-            .and_then(|v| v.as_str());
-        let project = arguments
-            .get("project")
-            .and_then(|v| v.as_str());
-            
+        let agent = arguments.get("agent").and_then(|v| v.as_str());
+        let event_type = arguments.get("event_type").and_then(|v| v.as_str());
+        let project = arguments.get("project").and_then(|v| v.as_str());
+
         let db_path = arguments
             .get("db_path")
             .and_then(|v| v.as_str())
@@ -44,19 +38,22 @@ impl ToolHandler for GestaltTimelineQueryHandler {
 
         match db.query_timeline(agent_filter, event_type_filter, project_filter, None, limit) {
             Ok(events) => {
-                let json_events: Vec<Value> = events.into_iter().map(|e| {
-                    serde_json::json!({
-                        "seq": e.seq,
-                        "run_id": e.run_id,
-                        "agent_id": e.agent_id,
-                        "event_type": e.event_type,
-                        "payload": e.payload,
-                        "created_at": e.created_at,
-                        "dedup_hash": e.dedup_hash,
-                        "project": e.project,
+                let json_events: Vec<Value> = events
+                    .into_iter()
+                    .map(|e| {
+                        serde_json::json!({
+                            "seq": e.seq,
+                            "run_id": e.run_id,
+                            "agent_id": e.agent_id,
+                            "event_type": e.event_type,
+                            "payload": e.payload,
+                            "created_at": e.created_at,
+                            "dedup_hash": e.dedup_hash,
+                            "project": e.project,
+                        })
                     })
-                }).collect();
-                
+                    .collect();
+
                 Ok(ok_result(
                     serde_json::to_string_pretty(&json_events).unwrap_or_default(),
                 ))
@@ -72,7 +69,7 @@ pub struct GestaltHealthHandler;
 impl ToolHandler for GestaltHealthHandler {
     async fn call(&self, _arguments: HashMap<String, Value>) -> McpResult<CallToolResult> {
         let discovered = gestalt_core::application::agent::discovery::discover_installed_clis();
-        
+
         let mut health_status = Vec::new();
         for agent in discovered {
             health_status.push(serde_json::json!({

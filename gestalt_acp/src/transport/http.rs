@@ -64,7 +64,10 @@ where
     S: Clone + Send + Sync + 'static,
 {
     let (tx, _) = broadcast::channel(100);
-    let state = Arc::new(AcpState { tx, session_manager: None });
+    let state = Arc::new(AcpState {
+        tx,
+        session_manager: None,
+    });
 
     Router::new()
         .route("/acp/rpc", post(handle_rpc))

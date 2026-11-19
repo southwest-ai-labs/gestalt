@@ -25,14 +25,14 @@ impl WorktreeGc {
                     if let Ok(age) = now.duration_since(modified) {
                         if age > self.max_age {
                             let path = entry.path();
-                            
+
                             tokio::task::spawn_blocking(move || {
                                 // Try git worktree remove
                                 let _ = Command::new("git")
                                     .args(["worktree", "remove", "--force"])
                                     .arg(&path)
                                     .output();
-                                
+
                                 // Ensure cleanup if git command failed or wasn't a worktree
                                 if path.exists() {
                                     let _ = std::fs::remove_dir_all(&path);

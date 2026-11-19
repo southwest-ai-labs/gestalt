@@ -13,7 +13,8 @@ pub fn check_nixos_environment() -> NixCheckResult {
 }
 
 fn is_nixos_system() -> bool {
-    Path::new("/etc/NIXOS").exists() || Path::new("/run/current-system/sw/bin/nixos-version").exists()
+    Path::new("/etc/NIXOS").exists()
+        || Path::new("/run/current-system/sw/bin/nixos-version").exists()
 }
 
 pub fn check_environment(is_nixos: bool) -> NixCheckResult {
@@ -25,9 +26,9 @@ pub fn check_environment(is_nixos: bool) -> NixCheckResult {
             }
         }
     }
-    
+
     let dev_shell_active = env::var("IN_NIX_SHELL").is_ok() || env::var("DIRENV_DIR").is_ok();
-    
+
     NixCheckResult {
         is_nixos,
         missing_vars,

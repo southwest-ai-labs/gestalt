@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use mcp_protocol_sdk::McpResult;
 use mcp_protocol_sdk::core::tool::ToolHandler;
-use mcp_protocol_sdk::protocol::types::{ContentBlock, CallToolResult};
+use mcp_protocol_sdk::protocol::types::{CallToolResult, ContentBlock};
+use mcp_protocol_sdk::McpResult;
 use serde_json::{json, Value};
 
 fn ok_result(text: String) -> CallToolResult {

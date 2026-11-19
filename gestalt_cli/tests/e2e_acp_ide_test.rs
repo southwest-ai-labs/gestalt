@@ -2,9 +2,9 @@
 // it("should perform a full ACP protocol lifecycle")
 
 use axum::Router;
+use serde_json::{json, Value};
 use std::sync::Arc;
 use tokio::net::TcpListener;
-use serde_json::{json, Value};
 
 use gestalt_acp::session::manager::AcpSessionManager;
 use gestalt_acp::transport::http::AcpHttpTransport;
@@ -38,13 +38,22 @@ async fn it_should_satisfy_acp_protocol_lifecycle() {
         }
     });
 
-    let init_res: Value = client.post(format!("{}/acp/rpc", base_url))
+    let init_res: Value = client
+        .post(format!("{}/acp/rpc", base_url))
         .json(&init_req)
-        .send().await.unwrap().json().await.unwrap();
-    
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+
     assert_eq!(init_res["jsonrpc"], "2.0");
     assert_eq!(init_res["id"], 1);
-    assert!(init_res["result"]["capabilities"].is_object(), "initialize should return capabilities");
+    assert!(
+        init_res["result"]["capabilities"].is_object(),
+        "initialize should return capabilities"
+    );
 
     // 2. session/new
     let session_req = json!({
@@ -54,13 +63,22 @@ async fn it_should_satisfy_acp_protocol_lifecycle() {
         "params": {}
     });
 
-    let session_res: Value = client.post(format!("{}/acp/rpc", base_url))
+    let session_res: Value = client
+        .post(format!("{}/acp/rpc", base_url))
         .json(&session_req)
-        .send().await.unwrap().json().await.unwrap();
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
 
     assert_eq!(session_res["id"], 2);
     let session_id = session_res["result"]["sessionId"].as_str().unwrap();
-    assert!(!session_id.is_empty(), "session/new should create a valid session ID");
+    assert!(
+        !session_id.is_empty(),
+        "session/new should create a valid session ID"
+    );
 
     // 3. session/prompt
     let prompt_req = json!({
@@ -73,12 +91,21 @@ async fn it_should_satisfy_acp_protocol_lifecycle() {
         }
     });
 
-    let prompt_res: Value = client.post(format!("{}/acp/rpc", base_url))
+    let prompt_res: Value = client
+        .post(format!("{}/acp/rpc", base_url))
         .json(&prompt_req)
-        .send().await.unwrap().json().await.unwrap();
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
 
     assert_eq!(prompt_res["id"], 3);
-    assert_eq!(prompt_res["result"]["status"], "success", "session/prompt should execute successfully");
+    assert_eq!(
+        prompt_res["result"]["status"], "success",
+        "session/prompt should execute successfully"
+    );
 
     // 4. session/cancel
     let cancel_req = json!({
@@ -90,10 +117,19 @@ async fn it_should_satisfy_acp_protocol_lifecycle() {
         }
     });
 
-    let cancel_res: Value = client.post(format!("{}/acp/rpc", base_url))
+    let cancel_res: Value = client
+        .post(format!("{}/acp/rpc", base_url))
         .json(&cancel_req)
-        .send().await.unwrap().json().await.unwrap();
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
 
     assert_eq!(cancel_res["id"], 4);
-    assert_eq!(cancel_res["result"]["status"], "cancelled", "session/cancel should clean up session state");
+    assert_eq!(
+        cancel_res["result"]["status"], "cancelled",
+        "session/cancel should clean up session state"
+    );
 }

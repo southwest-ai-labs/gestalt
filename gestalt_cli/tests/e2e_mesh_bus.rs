@@ -33,13 +33,13 @@ async fn it_should_handle_concurrent_mesh_events_with_dedup() {
                 .with_project(&project)
                 .with_state("Running")
                 .with_ts(chrono::Utc::now().to_rfc3339());
-            
+
             let ev_prog = BusEvent::new(&agent_name, "checkpoint", "Agent checkpoint 1")
                 .with_run_id(&run_id)
                 .with_project(&project)
                 .with_state("Running")
                 .with_ts(chrono::Utc::now().to_rfc3339());
-            
+
             let ev_fin = BusEvent::new(&agent_name, "run_finished", "Agent finished")
                 .with_run_id(&run_id)
                 .with_project(&project)
@@ -58,13 +58,7 @@ async fn it_should_handle_concurrent_mesh_events_with_dedup() {
                 .with_state("Running")
                 .with_ts(chrono::Utc::now().to_rfc3339());
 
-            let events_to_emit = vec![
-                ev_start_1,
-                ev_start_dup_1,
-                ev_prog,
-                ev_start_dup_2,
-                ev_fin,
-            ];
+            let events_to_emit = vec![ev_start_1, ev_start_dup_1, ev_prog, ev_start_dup_2, ev_fin];
 
             for ev in events_to_emit {
                 emitted += 1;

@@ -36,7 +36,10 @@ impl ThinkingDaemon {
 
     /// Run the daemon loop until cancelled.
     pub async fn run(&self, db: Arc<StateDb>, thinking_loop: Arc<ThinkingLoop>) {
-        info!("Starting ThinkingDaemon with interval {:?}", self.config.interval);
+        info!(
+            "Starting ThinkingDaemon with interval {:?}",
+            self.config.interval
+        );
         let mut ticker = tokio::time::interval(self.config.interval);
 
         loop {
@@ -72,7 +75,7 @@ pub fn should_trigger(db: &StateDb, last_check: DateTime<Utc>, min_count: usize)
         Err(e) => {
             warn!("Failed to query recent timeline: {}", e);
             return false;
-        }
+        },
     };
 
     let count = events

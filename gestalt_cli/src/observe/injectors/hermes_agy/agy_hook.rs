@@ -76,7 +76,8 @@ mod tests {
             "lifecycle_hooks": {
                 "on_start": ["other_hook.sh"]
             }
-        }).to_string();
+        })
+        .to_string();
         let merged = merge_agy_hooks(&existing, "my_hook.sh");
         let parsed: Value = serde_json::from_str(&merged).unwrap();
         let arr_start = parsed["lifecycle_hooks"]["on_start"].as_array().unwrap();
@@ -94,7 +95,8 @@ mod tests {
                 "on_start": ["my_hook.sh"],
                 "on_stop": ["my_hook.sh"]
             }
-        }).to_string();
+        })
+        .to_string();
         let merged = merge_agy_hooks(&existing, "my_hook.sh");
         let parsed: Value = serde_json::from_str(&merged).unwrap();
         let arr_start = parsed["lifecycle_hooks"]["on_start"].as_array().unwrap();

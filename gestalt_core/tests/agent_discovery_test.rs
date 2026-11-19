@@ -49,7 +49,7 @@ fn test_discover_installed_clis() {
     for agent in discovered {
         assert_eq!(agent.version, format!("mock-{}-1.0", agent.name));
         assert_eq!(agent.binary_path.parent().unwrap(), temp_path);
-        
+
         // Basic check for capabilities based on name
         if agent.name == "claude" {
             assert!(agent.capabilities.vision);

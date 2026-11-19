@@ -76,7 +76,7 @@ fn test_lock_reaper_evicts_correctly() {
 
     // Run reaper
     let reaped = LockReaper::reap_expired_locks(&db, Duration::from_secs(300)).unwrap();
-    
+
     // We expect exactly 2 locks to be reaped (Lock 2 and Lock 3)
     assert_eq!(reaped, 2, "Reaper should have evicted 2 locks");
 
@@ -88,14 +88,17 @@ fn test_lock_reaper_evicts_correctly() {
 
     // Verify events were emitted
     let events = db.timeline_by_run(run_id).unwrap();
-    let evict_events: Vec<_> = events.iter().filter(|e| e.event_type == "lock_evicted").collect();
+    let evict_events: Vec<_> = events
+        .iter()
+        .filter(|e| e.event_type == "lock_evicted")
+        .collect();
     assert_eq!(evict_events.len(), 2, "Should have 2 lock_evicted events");
 
     let mut payloads: Vec<_> = evict_events.iter().map(|e| &e.payload).collect();
     payloads.sort();
     assert!(payloads[0].contains("/tmp/file2"));
     assert!(payloads[0].contains("dead_agent"));
-    
+
     assert!(payloads[1].contains("/tmp/file3"));
     assert!(payloads[1].contains("expired"));
 }

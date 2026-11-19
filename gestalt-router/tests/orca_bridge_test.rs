@@ -72,7 +72,9 @@ fn test_parse_orca_event_invalid_type() {
 
     let result = parse_orca_event(payload);
     assert!(result.is_err());
-    assert!(result.unwrap_err().contains("Unknown hook type: unknown_hook"));
+    assert!(result
+        .unwrap_err()
+        .contains("Unknown hook type: unknown_hook"));
 }
 
 #[tokio::test]
@@ -103,7 +105,11 @@ async fn test_listen_and_forward_integration() {
         "run_id": "r-999",
         "message": "Done!"
     }"#;
-    let payload = format!("POST / HTTP/1.1\r\nContent-Length: {}\r\n\r\n{}", body.len(), body);
+    let payload = format!(
+        "POST / HTTP/1.1\r\nContent-Length: {}\r\n\r\n{}",
+        body.len(),
+        body
+    );
 
     let mut stream = TcpStream::connect(&bind_addr).await.unwrap();
     stream.write_all(payload.as_bytes()).await.unwrap();
@@ -114,7 +120,7 @@ async fn test_listen_and_forward_integration() {
 
     // Check DB
     let events = db.get_events_older_than(chrono::Utc::now()).unwrap();
-    
+
     // Cleanup first
     cancel_token.cancel();
     server_handle.await.unwrap();
@@ -148,7 +154,7 @@ async fn test_fail_open_timeout() {
 
     // Connect but never send data
     let mut stream = TcpStream::connect(&bind_addr).await.unwrap();
-    
+
     // We expect the server connection to time out after 3s, fail open, and not crash.
     // Wait > 3s
     sleep(Duration::from_secs(4)).await;
@@ -159,7 +165,7 @@ async fn test_fail_open_timeout() {
 
     cancel_token.cancel();
     server_handle.await.unwrap();
-    
+
     // DB should have 0 events
     let events = db.get_events_older_than(chrono::Utc::now()).unwrap();
     assert!(events.is_empty());

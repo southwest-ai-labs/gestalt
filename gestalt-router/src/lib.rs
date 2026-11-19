@@ -4,9 +4,9 @@
 #![allow(clippy::double_must_use)]
 #![allow(unsafe_code)]
 
-pub mod consensus;
 pub mod agent;
 pub mod checkpoint;
+pub mod consensus;
 pub mod doctor;
 pub mod event_bus;
 pub mod health;

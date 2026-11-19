@@ -8,15 +8,15 @@
 #![allow(clippy::double_must_use)]
 pub mod api_routes;
 
+pub mod admin_telemetry;
 mod agent_wrapper;
 mod bus;
 mod chain;
+pub mod commands;
 mod config;
 mod observe;
 mod repl;
 mod shutdown;
-pub mod admin_telemetry;
-pub mod commands;
 pub mod task_api;
 pub mod xavier_plugin;
 
@@ -1002,7 +1002,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::Acp { action } => match action {
             AcpAction::Serve { stdio, port } => {
                 crate::commands::acp_serve::serve(stdio, port, shutdown).await?;
-            }
+            },
         },
 
         Commands::Mcp { action } => match action {
@@ -1096,7 +1096,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     _ => {
                         eprintln!("❌ Target server is offline at {}", url);
                         std::process::exit(1);
-                    }
+                    },
                 }
             }
             crate::commands::status_tui::run_status(json).await?;

@@ -44,17 +44,19 @@ impl AcpMcpBridge {
                 let is_error = result.is_error.unwrap_or(false);
                 let mut text_content = String::new();
                 for block in result.content {
-                    if let mcp_protocol_sdk::protocol::types::ContentBlock::Text { text, .. } = block {
+                    if let mcp_protocol_sdk::protocol::types::ContentBlock::Text { text, .. } =
+                        block
+                    {
                         text_content.push_str(&text);
                     }
                 }
-                
+
                 if is_error {
                     Err(text_content)
                 } else {
                     Ok(json!({ "content": text_content }))
                 }
-            }
+            },
             Err(e) => Err(format!("Tool execution failed: {}", e)),
         }
     }

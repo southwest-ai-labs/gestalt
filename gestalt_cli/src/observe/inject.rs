@@ -125,7 +125,7 @@ fn escape_shell_default(s: &str) -> String {
             '\\' | '"' | '$' | '`' | '}' => {
                 out.push('\\');
                 out.push(c);
-            }
+            },
             _ => out.push(c),
         }
     }

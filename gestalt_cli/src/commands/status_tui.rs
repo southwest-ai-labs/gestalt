@@ -1,9 +1,11 @@
-use gestalt_router::health::{check_all, HealthReport, PROVIDERS, DEFAULT_TIMEOUT, DEFAULT_TTL, HealthStatus};
+use anyhow::Result;
+use gestalt_core::application::agent::xavier::XavierClient;
+use gestalt_router::health::{
+    check_all, HealthReport, HealthStatus, DEFAULT_TIMEOUT, DEFAULT_TTL, PROVIDERS,
+};
 use gestalt_state::schema::FileLock;
 use gestalt_state::StateDb;
-use gestalt_core::application::agent::xavier::XavierClient;
 use serde::Serialize;
-use anyhow::Result;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct BusInfo {
@@ -19,15 +21,23 @@ pub struct StatusReport {
     pub locks: Vec<FileLock>,
 }
 
-pub fn render_status_report(bus_info: BusInfo, providers: HealthReport, locks: Vec<FileLock>) -> String {
+pub fn render_status_report(
+    bus_info: BusInfo,
+    providers: HealthReport,
+    locks: Vec<FileLock>,
+) -> String {
     let mut out = String::new();
-    
+
     // Panel 1: Universal Bus Status
     out.push_str("📡 Universal Bus Status\n");
     out.push_str("=======================\n");
     out.push_str(&format!("Endpoint: {}\n", bus_info.endpoint));
     out.push_str(&format!("Events:   {}\n", bus_info.event_count));
-    let x_status = if bus_info.xavier_connected { "Online" } else { "Offline" };
+    let x_status = if bus_info.xavier_connected {
+        "Online"
+    } else {
+        "Offline"
+    };
     out.push_str(&format!("Xavier:   {}\n\n", x_status));
 
     // Panel 2: Providers Matrix
@@ -56,10 +66,13 @@ pub fn render_status_report(bus_info: BusInfo, providers: HealthReport, locks: V
         out.push_str("No active locks.\n");
     } else {
         for lock in locks {
-            out.push_str(&format!("- {} (held by agent {})\n", lock.path, lock.agent_id));
+            out.push_str(&format!(
+                "- {} (held by agent {})\n",
+                lock.path, lock.agent_id
+            ));
         }
     }
-    
+
     out
 }
 
@@ -69,7 +82,7 @@ pub async fn run_status(json_mode: bool) -> Result<()> {
         .unwrap_or_else(|| std::path::PathBuf::from("."))
         .join(".gestalt")
         .join("state.db");
-    
+
     let (event_count, locks) = match StateDb::open(&db_path) {
         Ok(db) => {
             let count = db.event_count().unwrap_or(0);

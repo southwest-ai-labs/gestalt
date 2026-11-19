@@ -53,7 +53,7 @@ where
             None => {
                 debug!("Auth bypassed: GESTALT_BUS_TOKEN is not set");
                 return Ok(Self);
-            }
+            },
         };
 
         // Check query parameter first
@@ -84,11 +84,11 @@ where
                     warn!("Auth failed: invalid token provided");
                     Err(StatusCode::UNAUTHORIZED.into_response())
                 }
-            }
+            },
             None => {
                 warn!("Auth failed: missing token");
                 Err(StatusCode::UNAUTHORIZED.into_response())
-            }
+            },
         }
     }
 }

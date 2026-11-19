@@ -1,7 +1,7 @@
-use std::sync::Arc;
+use crate::event_bus::handle_event;
 use gestalt_state::StateDb;
 use gestalt_ws::BusEvent;
-use crate::event_bus::handle_event;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConsensusVerdict {
@@ -19,13 +19,18 @@ impl ConsensusRunner {
         review_verdict: &ConsensusVerdict,
     ) -> Result<ConsensusVerdict, String> {
         let (event_type, summary) = match review_verdict {
-            ConsensusVerdict::Approved => ("consensus_approved".to_string(), "Consensus Approved".to_string()),
-            ConsensusVerdict::Rejected { feedback } => {
-                ("consensus_rejected".to_string(), format!("Consensus Rejected: {}", feedback))
-            }
-            ConsensusVerdict::Conflict { reason } => {
-                ("consensus_conflict".to_string(), format!("Consensus Conflict: {}", reason))
-            }
+            ConsensusVerdict::Approved => (
+                "consensus_approved".to_string(),
+                "Consensus Approved".to_string(),
+            ),
+            ConsensusVerdict::Rejected { feedback } => (
+                "consensus_rejected".to_string(),
+                format!("Consensus Rejected: {}", feedback),
+            ),
+            ConsensusVerdict::Conflict { reason } => (
+                "consensus_conflict".to_string(),
+                format!("Consensus Conflict: {}", reason),
+            ),
         };
 
         let event = BusEvent::new("consensus_runner", event_type, summary);

@@ -8,7 +8,9 @@ pub struct InstallHooksResult {
 }
 
 pub fn install_hooks(dry_run: bool) -> Result<InstallHooksResult, Box<dyn std::error::Error>> {
-    let home = std::env::var("HOME").map(PathBuf::from).unwrap_or_else(|_| PathBuf::from("."));
+    let home = std::env::var("HOME")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("."));
     let mut installed = Vec::new();
     let mut skipped = Vec::new();
 
@@ -18,7 +20,8 @@ pub fn install_hooks(dry_run: bool) -> Result<InstallHooksResult, Box<dyn std::e
     let claude_dir = home.join(".claude");
     if claude_dir.exists() {
         if !dry_run {
-            match crate::observe::injectors::claude_hook::inject_claude_hook(&claude_dir, hook_cmd) {
+            match crate::observe::injectors::claude_hook::inject_claude_hook(&claude_dir, hook_cmd)
+            {
                 Ok(_) => installed.push("claude".to_string()),
                 Err(e) => skipped.push(format!("claude: {}", e)),
             }
@@ -33,7 +36,10 @@ pub fn install_hooks(dry_run: bool) -> Result<InstallHooksResult, Box<dyn std::e
     let opencode_dir = home.join(".config").join("opencode");
     if opencode_dir.exists() {
         if !dry_run {
-            match crate::observe::injectors::opencode_hook::inject_opencode_hook(&opencode_dir, hook_cmd) {
+            match crate::observe::injectors::opencode_hook::inject_opencode_hook(
+                &opencode_dir,
+                hook_cmd,
+            ) {
                 Ok(_) => installed.push("opencode".to_string()),
                 Err(e) => skipped.push(format!("opencode: {}", e)),
             }
@@ -48,7 +54,10 @@ pub fn install_hooks(dry_run: bool) -> Result<InstallHooksResult, Box<dyn std::e
     let hermes_dir = home.join(".hermes");
     if hermes_dir.exists() {
         if !dry_run {
-            match crate::observe::injectors::hermes_agy::hermes_hook::inject_hermes_hooks(&hermes_dir, hook_cmd) {
+            match crate::observe::injectors::hermes_agy::hermes_hook::inject_hermes_hooks(
+                &hermes_dir,
+                hook_cmd,
+            ) {
                 Ok(_) => installed.push("hermes".to_string()),
                 Err(e) => skipped.push(format!("hermes: {}", e)),
             }
@@ -63,7 +72,9 @@ pub fn install_hooks(dry_run: bool) -> Result<InstallHooksResult, Box<dyn std::e
     let agy_dir = home.join(".gemini").join("antigravity");
     if agy_dir.exists() {
         if !dry_run {
-            match crate::observe::injectors::hermes_agy::agy_hook::inject_agy_hooks(&agy_dir, hook_cmd) {
+            match crate::observe::injectors::hermes_agy::agy_hook::inject_agy_hooks(
+                &agy_dir, hook_cmd,
+            ) {
                 Ok(_) => installed.push("agy".to_string()),
                 Err(e) => skipped.push(format!("agy: {}", e)),
             }

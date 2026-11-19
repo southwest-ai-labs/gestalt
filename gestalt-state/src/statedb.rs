@@ -33,6 +33,7 @@ pub struct StateDb {
 pub type TransactionalStateDb = StateDb;
 
 /// Transaction-hardened variant of the SQLite StateDB (Pascal/upper-case alias).
+#[deprecated(note = "Use TransactionalStateDb instead")]
 pub type TransactionalStateDB = StateDb;
 
 impl StateDb {
@@ -51,9 +52,13 @@ impl StateDb {
         let conn = Connection::open(path)
             .with_context(|| format!("Failed to open SQLite DB at {}", path.display()))?;
 
-        // Enable WAL mode for concurrent read performance
-        conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")
-            .context("Failed to set PRAGMAs")?;
+        // Enable WAL mode for concurrent read performance and set busy_timeout for concurrency
+        conn.execute_batch(
+            "PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;",
+        )
+        .context("Failed to set PRAGMAs")?;
+        conn.busy_timeout(std::time::Duration::from_millis(5000))
+            .context("Failed to set busy timeout")?;
 
         let db = Self {
             conn: Arc::new(Mutex::new(conn)),
@@ -151,6 +156,20 @@ impl StateDb {
                 },
             }
         }
+    }
+
+    /// Run a closure inside a SQLite exclusive transaction on a Tokio blocking thread.
+    ///
+    /// This prevents blocking Tokio worker threads during database operations.
+    pub async fn execute_transaction_async<F, T>(&self, f: F) -> Result<T>
+    where
+        T: Send + 'static,
+        F: Fn(&rusqlite::Transaction<'_>) -> Result<T> + Send + 'static,
+    {
+        let db = self.clone();
+        tokio::task::spawn_blocking(move || db.execute_transaction(f))
+            .await
+            .map_err(|e| anyhow::anyhow!("spawn_blocking join error: {e}"))?
     }
 
     /// Create all tables and indexes if they don't exist.

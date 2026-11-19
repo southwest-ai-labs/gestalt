@@ -13,7 +13,8 @@ use crate::tools::err_result;
 pub const FORBIDDEN_METACHARS: &[char] = &[';', '|', '&', '$', '(', ')', '`', '>', '<', '\n', '\r'];
 pub const MAX_OUTPUT_BYTES: usize = 1024 * 1024; // 1 MiB
 pub const TRUNCATION_WARNING: &str = "\n[WARNING: Output exceeded 1 MiB limit and was truncated]\n";
-pub const DEFAULT_ALLOWED_COMMANDS: &[&str] = &["echo", "git", "cargo", "ls", "cat", "grep", "diff"];
+pub const DEFAULT_ALLOWED_COMMANDS: &[&str] =
+    &["echo", "git", "cargo", "ls", "cat", "grep", "diff"];
 pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
 
 /// Splits a command string into binary and arguments without shell interpolation.
@@ -21,7 +22,10 @@ pub const DEFAULT_TIMEOUT_SECS: u64 = 30;
 pub fn parse_command_tokens(cmd: &str) -> Result<Vec<String>, String> {
     for c in cmd.chars() {
         if FORBIDDEN_METACHARS.contains(&c) {
-            return Err(format!("Command contains forbidden shell metacharacter: {:?}", c));
+            return Err(format!(
+                "Command contains forbidden shell metacharacter: {:?}",
+                c
+            ));
         }
     }
 
@@ -116,11 +120,13 @@ pub fn resolve_working_directory(cwd_arg: Option<&str>) -> Result<std::path::Pat
     let workspace_root = if let Ok(root_str) = std::env::var("GESTALT_WORKSPACE_ROOT") {
         let p = std::path::PathBuf::from(&root_str);
         if !p.exists() {
-            return Err(format!("GESTALT_WORKSPACE_ROOT '{}' does not exist", root_str));
+            return Err(format!(
+                "GESTALT_WORKSPACE_ROOT '{}' does not exist",
+                root_str
+            ));
         }
-        std::fs::canonicalize(&p).map_err(|e| {
-            format!("Invalid GESTALT_WORKSPACE_ROOT '{}': {}", root_str, e)
-        })?
+        std::fs::canonicalize(&p)
+            .map_err(|e| format!("Invalid GESTALT_WORKSPACE_ROOT '{}': {}", root_str, e))?
     } else {
         std::env::current_dir()
             .and_then(std::fs::canonicalize)
@@ -136,9 +142,8 @@ pub fn resolve_working_directory(cwd_arg: Option<&str>) -> Result<std::path::Pat
                 workspace_root.join(cwd_str)
             };
 
-            let canonical_cwd = std::fs::canonicalize(&target_path).map_err(|e| {
-                format!("Invalid working directory '{}': {}", cwd_str, e)
-            })?;
+            let canonical_cwd = std::fs::canonicalize(&target_path)
+                .map_err(|e| format!("Invalid working directory '{}': {}", cwd_str, e))?;
 
             if !canonical_cwd.starts_with(&workspace_root) {
                 return Err(format!(
@@ -179,7 +184,9 @@ impl ToolHandler for GestaltRunStreamHandler {
                 return Ok(err_result("program cannot be empty".to_string()));
             }
             if prog.chars().any(|c| FORBIDDEN_METACHARS.contains(&c)) {
-                return Ok(err_result("Program contains forbidden shell metacharacters".to_string()));
+                return Ok(err_result(
+                    "Program contains forbidden shell metacharacters".to_string(),
+                ));
             }
             let prog_trimmed = prog.trim();
             if prog_trimmed.is_empty() {
@@ -204,7 +211,7 @@ impl ToolHandler for GestaltRunStreamHandler {
                     let bin = tokens[0].clone();
                     let args = tokens[1..].to_vec();
                     (bin, args)
-                }
+                },
                 Err(e) => return Ok(err_result(e)),
             }
         } else {
@@ -240,7 +247,12 @@ impl ToolHandler for GestaltRunStreamHandler {
             .spawn()
         {
             Ok(c) => c,
-            Err(e) => return Ok(err_result(format!("Failed to spawn process '{}': {}", binary, e))),
+            Err(e) => {
+                return Ok(err_result(format!(
+                    "Failed to spawn process '{}': {}",
+                    binary, e
+                )))
+            },
         };
 
         let stdout = child.stdout.take().expect("Failed to open stdout");
@@ -336,7 +348,7 @@ impl ToolHandler for GestaltRunStreamHandler {
                 Err(e) => {
                     output.push_str(&format!("Failed to wait for process: {}\n", e));
                     false
-                }
+                },
             };
 
             (output, status, truncated)
@@ -344,18 +356,14 @@ impl ToolHandler for GestaltRunStreamHandler {
 
         match tokio::time::timeout(timeout_duration, stream_future).await {
             Ok((out, success, is_trunc)) => {
-                let is_error = if is_trunc {
-                    false
-                } else {
-                    !success
-                };
+                let is_error = if is_trunc { false } else { !success };
                 Ok(CallToolResult {
                     content: vec![ContentBlock::text(out)],
                     is_error: Some(is_error),
                     structured_content: None,
                     meta: None,
                 })
-            }
+            },
             Err(_) => {
                 let _ = child.kill().await;
                 let _ = child.wait().await;
@@ -363,7 +371,7 @@ impl ToolHandler for GestaltRunStreamHandler {
                     "Command timed out after {} seconds",
                     timeout_duration.as_secs()
                 )))
-            }
+            },
         }
     }
 }

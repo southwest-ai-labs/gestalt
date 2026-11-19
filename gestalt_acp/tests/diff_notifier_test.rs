@@ -14,8 +14,14 @@ async fn test_generate_diff_notification() {
     assert_eq!(notification.params.new_content, after);
     assert!(notification.params.diff.contains("--- a"));
     assert!(notification.params.diff.contains("+++ b"));
-    assert!(notification.params.diff.contains("-    println!(\"Hello\");"));
-    assert!(notification.params.diff.contains("+    println!(\"Hello World\");"));
+    assert!(notification
+        .params
+        .diff
+        .contains("-    println!(\"Hello\");"));
+    assert!(notification
+        .params
+        .diff
+        .contains("+    println!(\"Hello World\");"));
 }
 
 #[tokio::test]

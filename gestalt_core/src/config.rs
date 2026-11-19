@@ -62,8 +62,8 @@ mod tests {
 
         // Deserializing with pass field populates pass
         let json_with_pass = r#"{"url":"localhost:8000","user":"root","pass":"custom_pass","namespace":"gestalt","database":"test"}"#;
-        let deserialized_with_pass: DatabaseSettings = serde_json::from_str(json_with_pass).unwrap();
+        let deserialized_with_pass: DatabaseSettings =
+            serde_json::from_str(json_with_pass).unwrap();
         assert_eq!(deserialized_with_pass.pass, "custom_pass");
     }
 }
-

@@ -28,7 +28,9 @@ async fn test_rpc_handler() {
 
     assert_eq!(response.status(), StatusCode::OK);
 
-    let body = axum::body::to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = axum::body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .unwrap();
     let rpc_res: JsonRpcResponse = serde_json::from_slice(&body).unwrap();
 
     assert_eq!(rpc_res.jsonrpc, "2.0");

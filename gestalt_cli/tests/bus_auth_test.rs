@@ -7,10 +7,10 @@
 //     it("enforces DefaultBodyLimit on oversized payloads")
 // })
 
-#[path = "../src/bus.rs"]
-pub mod bus;
 #[path = "../src/api_routes/mod.rs"]
 pub mod api_routes;
+#[path = "../src/bus.rs"]
+pub mod bus;
 
 use axum::{
     body::Body,
@@ -26,7 +26,10 @@ static TEST_ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
 #[tokio::test]
 async fn test_api_event_unauthorized_when_token_set() {
     let _guard = TEST_ENV_MUTEX.lock().unwrap();
-    std::env::set_var("GESTALT_API_TOKEN", "gestalt-test-auth-token-32-chars-long-here");
+    std::env::set_var(
+        "GESTALT_API_TOKEN",
+        "gestalt-test-auth-token-32-chars-long-here",
+    );
 
     let db = Arc::new(StateDb::open(":memory:").unwrap());
     let app = build_router(BusState { db, sink: None });
@@ -82,7 +85,10 @@ async fn test_api_event_authorized_with_valid_bearer_token() {
 #[tokio::test]
 async fn test_healthz_endpoint_remains_unauthenticated() {
     let _guard = TEST_ENV_MUTEX.lock().unwrap();
-    std::env::set_var("GESTALT_API_TOKEN", "gestalt-test-auth-token-32-chars-long-here");
+    std::env::set_var(
+        "GESTALT_API_TOKEN",
+        "gestalt-test-auth-token-32-chars-long-here",
+    );
 
     let db = Arc::new(StateDb::open(":memory:").unwrap());
     let app = build_router(BusState { db, sink: None });
@@ -146,4 +152,3 @@ fn test_validate_bind_host_and_token() {
 
     std::env::remove_var("GESTALT_API_TOKEN");
 }
-

@@ -9,7 +9,12 @@ pub struct RetryPolicy {
 }
 
 impl RetryPolicy {
-    pub fn new(max_retries: u32, initial_delay_ms: u64, max_delay_ms: u64, jitter_factor: f64) -> Self {
+    pub fn new(
+        max_retries: u32,
+        initial_delay_ms: u64,
+        max_delay_ms: u64,
+        jitter_factor: f64,
+    ) -> Self {
         Self {
             max_retries,
             initial_delay_ms,
@@ -24,7 +29,9 @@ impl RetryPolicy {
         }
 
         // Exponential backoff
-        let base_delay = self.initial_delay_ms.saturating_mul(2u64.saturating_pow(attempt));
+        let base_delay = self
+            .initial_delay_ms
+            .saturating_mul(2u64.saturating_pow(attempt));
         let capped_delay = base_delay.min(self.max_delay_ms);
 
         // Apply jitter
@@ -35,13 +42,15 @@ impl RetryPolicy {
                 val = (val << 8) | (*byte as u64);
             }
             let random_float = (val as f64) / (u64::MAX as f64);
-            
+
             // Jitter is +/- (capped_delay * jitter_factor)
             let jitter_amount = (capped_delay as f64 * self.jitter_factor * random_float) as u64;
-            
+
             // Randomly add or subtract the jitter amount
             if bytes[8].is_multiple_of(2) {
-                capped_delay.saturating_add(jitter_amount).min(self.max_delay_ms)
+                capped_delay
+                    .saturating_add(jitter_amount)
+                    .min(self.max_delay_ms)
             } else {
                 capped_delay.saturating_sub(jitter_amount)
             }

@@ -30,7 +30,11 @@ impl DiffNotifier {
         self.tx.subscribe()
     }
 
-    pub fn generate_diff_notification(path: &str, before: &str, after: &str) -> FileUpdateNotification {
+    pub fn generate_diff_notification(
+        path: &str,
+        before: &str,
+        after: &str,
+    ) -> FileUpdateNotification {
         let diff = TextDiff::from_lines(before, after)
             .unified_diff()
             .header("a", "b")
@@ -47,7 +51,12 @@ impl DiffNotifier {
         }
     }
 
-    pub fn broadcast_file_update(&self, path: &str, before: &str, after: &str) -> Result<usize, broadcast::error::SendError<FileUpdateNotification>> {
+    pub fn broadcast_file_update(
+        &self,
+        path: &str,
+        before: &str,
+        after: &str,
+    ) -> Result<usize, broadcast::error::SendError<FileUpdateNotification>> {
         let notification = Self::generate_diff_notification(path, before, after);
         self.tx.send(notification)
     }

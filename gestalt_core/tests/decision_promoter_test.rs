@@ -1,6 +1,4 @@
-use gestalt_core::application::agent::xavier::{
-    DecisionRecord, DecisionStatus,
-};
+use gestalt_core::application::agent::xavier::{DecisionRecord, DecisionStatus};
 
 #[test]
 fn test_schema_validation() {
@@ -33,10 +31,10 @@ fn test_status_transitions() {
     };
 
     assert_eq!(record.status, DecisionStatus::Proposed);
-    
+
     record.status = DecisionStatus::Accepted;
     assert_eq!(record.status, DecisionStatus::Accepted);
-    
+
     record.status = DecisionStatus::Superseded;
     assert_eq!(record.status, DecisionStatus::Superseded);
 }

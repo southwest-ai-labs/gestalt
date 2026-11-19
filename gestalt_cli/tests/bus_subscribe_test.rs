@@ -1,7 +1,7 @@
 #[path = "../src/commands/bus_subscribe.rs"]
 mod bus_subscribe;
 
-use bus_subscribe::{matches_filter, BusEvent, format_event};
+use bus_subscribe::{format_event, matches_filter, BusEvent};
 
 #[test]
 fn test_matches_filter() {
@@ -13,7 +13,7 @@ fn test_matches_filter() {
         run_id: None,
         ts: None,
     };
-    
+
     let event2 = BusEvent {
         agent: "other_agent".to_string(),
         event_type: "run_finished".to_string(),
@@ -37,8 +37,16 @@ fn test_matches_filter() {
     assert!(matches_filter(&event2, None, Some("run_finished")));
 
     // Both filters
-    assert!(matches_filter(&event1, Some("test_agent"), Some("run_started")));
-    assert!(!matches_filter(&event1, Some("test_agent"), Some("run_finished")));
+    assert!(matches_filter(
+        &event1,
+        Some("test_agent"),
+        Some("run_started")
+    ));
+    assert!(!matches_filter(
+        &event1,
+        Some("test_agent"),
+        Some("run_finished")
+    ));
 }
 
 #[test]
@@ -53,7 +61,7 @@ fn test_format_event() {
     };
 
     let formatted = format_event(&event);
-    
+
     // Test that the correct substrings are present in the formatted string.
     assert!(formatted.contains("2024-01-01T00:00:00Z"));
     assert!(formatted.contains("agent1"));
