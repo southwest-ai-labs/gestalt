@@ -1125,13 +1125,16 @@ pub async fn register_standard_tools(server: &McpServer) -> anyhow::Result<()> {
     server
         .add_tool(
             "gestalt_run_stream".to_string(),
-            Some("Stream execution output for a Gestalt command in real-time".to_string()),
+            Some("Stream execution output for an allowlisted command in real-time with workspace confinement".to_string()),
             serde_json::json!({
                 "type": "object",
                 "properties": {
-                    "command": { "type": "string", "description": "Command to execute (e.g. 'gestalt chain run')" }
-                },
-                "required": ["command"]
+                    "command": { "type": "string", "description": "Command string to execute (e.g. 'echo Hello World')" },
+                    "program": { "type": "string", "description": "Optional program binary to execute directly" },
+                    "args": { "type": "array", "items": { "type": "string" }, "description": "Optional arguments for program" },
+                    "cwd": { "type": "string", "description": "Optional working directory (confined within workspace root)" },
+                    "timeout": { "type": "integer", "description": "Optional timeout in seconds (default 30)" }
+                }
             }),
             GestaltRunStreamHandler,
         )

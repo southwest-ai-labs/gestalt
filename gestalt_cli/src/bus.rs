@@ -21,12 +21,14 @@
 //! (agent, llm, provider, decision, requested_by) across all agents.
 
 use axum::{
-    extract::{Query, State},
+    extract::{DefaultBodyLimit, Query, Request, State},
     http::StatusCode,
+    middleware::{self, Next},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
+use subtle::ConstantTimeEq;
 use gestalt_router::{
     event_bus::{handle_event, BusEvent},
     health::{HealthCache, HealthReport, HealthStatus},
@@ -36,6 +38,99 @@ use gestalt_state::StateDb;
 use serde::Deserialize;
 use std::sync::{Arc, OnceLock};
 use tracing::{info, warn};
+
+/// Check if a host is loopback (e.g. 127.0.0.1, ::1, localhost)
+pub fn is_loopback_host(host: &str) -> bool {
+    let host = host.trim();
+    if host.eq_ignore_ascii_case("localhost") {
+        return true;
+    }
+    if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+        return ip.is_loopback();
+    }
+    false
+}
+
+/// Validate that non-loopback host bindings have a secure GESTALT_API_TOKEN (>= 32 chars).
+pub fn validate_bind_host_and_token(host: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if !is_loopback_host(host) {
+        let token = std::env::var("GESTALT_API_TOKEN").unwrap_or_default();
+        if token.trim().len() < 32 {
+            return Err(format!(
+                "Refusing to bind to non-loopback host '{host}' without secure GESTALT_API_TOKEN (must be at least 32 characters, got {})",
+                token.trim().len()
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
+/// Constant-time string equality check.
+pub fn constant_time_eq_str(a: &str, b: &str) -> bool {
+    let a_bytes = a.as_bytes();
+    let b_bytes = b.as_bytes();
+    if a_bytes.len() != b_bytes.len() {
+        return false;
+    }
+    a_bytes.ct_eq(b_bytes).into()
+}
+
+#[derive(Clone, Copy)]
+pub struct Authenticated;
+
+/// Bearer-token authentication middleware for protected routes (/api/*, /v1/*).
+/// Unauthenticated requests receive 401 Unauthorized if GESTALT_API_TOKEN is set.
+/// /healthz is left unauthenticated.
+pub async fn auth_middleware(
+    mut req: Request,
+    next: Next,
+) -> axum::response::Response {
+    if req.extensions().get::<Authenticated>().is_some() {
+        return next.run(req).await;
+    }
+
+    let path = req.uri().path().to_string();
+    let is_protected = (path.starts_with("/api/")
+        || path == "/api"
+        || path.starts_with("/v1/")
+        || path == "/v1")
+        && path != "/healthz";
+
+    if is_protected {
+        if let Ok(expected_token) = std::env::var("GESTALT_API_TOKEN") {
+            let expected_token = expected_token.trim();
+            if !expected_token.is_empty() {
+                let auth_header = req.headers().get(axum::http::header::AUTHORIZATION);
+                let is_valid = if let Some(val) = auth_header.and_then(|v| v.to_str().ok()) {
+                    let val = val.trim();
+                    if let Some(token) = val.strip_prefix("Bearer ").or_else(|| val.strip_prefix("bearer ")) {
+                        constant_time_eq_str(token.trim(), expected_token)
+                    } else {
+                        false
+                    }
+                } else {
+                    false
+                };
+
+                if !is_valid {
+                    return (
+                        StatusCode::UNAUTHORIZED,
+                        Json(serde_json::json!({
+                            "error": "Unauthorized",
+                            "message": "Invalid or missing Bearer token"
+                        })),
+                    )
+                        .into_response();
+                }
+
+                req.extensions_mut().insert(Authenticated);
+            }
+        }
+    }
+
+    next.run(req).await
+}
 
 /// Process-wide provider health cache (30s TTL, shared by every request).
 fn provider_health_cache() -> &'static Arc<HealthCache> {
@@ -60,6 +155,8 @@ pub fn build_router(state: BusState) -> Router {
         )
         .route("/healthz", get(healthz))
         .route("/api/health/providers", get(providers_health_http))
+        .layer(middleware::from_fn(auth_middleware))
+        .layer(DefaultBodyLimit::max(2 * 1024 * 1024))
         .with_state(state)
 }
 
@@ -145,6 +242,8 @@ pub async fn serve(
     port: u16,
     db_path: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    validate_bind_host_and_token(host)?;
+
     let state_db_path = db_path.map(std::path::PathBuf::from).unwrap_or_else(|| {
         home::home_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))
@@ -245,4 +344,27 @@ fn structural_insight(executions: &[String]) -> String {
         state_parts.join(", "),
         agent_parts.join(", ")
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_loopback_host() {
+        assert!(is_loopback_host("127.0.0.1"));
+        assert!(is_loopback_host("localhost"));
+        assert!(is_loopback_host("::1"));
+        assert!(!is_loopback_host("0.0.0.0"));
+        assert!(!is_loopback_host("192.168.1.1"));
+        assert!(!is_loopback_host("example.com"));
+    }
+
+    #[test]
+    fn test_constant_time_eq_str() {
+        assert!(constant_time_eq_str("secret-token", "secret-token"));
+        assert!(!constant_time_eq_str("secret-token", "wrong-token!"));
+        assert!(!constant_time_eq_str("secret-token", "secret-toke"));
+        assert!(!constant_time_eq_str("secret-token", ""));
+    }
 }

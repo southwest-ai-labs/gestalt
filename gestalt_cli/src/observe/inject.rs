@@ -118,13 +118,27 @@ pub fn merge_claude_settings(existing: &str, new_hook_cmd: &str) -> String {
     serde_json::to_string_pretty(&root).unwrap_or_else(|_| existing.to_string())
 }
 
+fn escape_shell_default(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '\\' | '"' | '$' | '`' | '}' => {
+                out.push('\\');
+                out.push(c);
+            }
+            _ => out.push(c),
+        }
+    }
+    out
+}
+
 /// Dynamically builds the observation hook script with replaced agent, event, and summary values.
 pub fn build_hook_script(agent: &str, event_type: &str, summary: &str) -> String {
     let base_script = include_str!("assets/gestalt-observe-hook.sh");
     base_script
-        .replace("unknown-agent", agent)
-        .replace("run_started", event_type)
-        .replace("Agent execution event", summary)
+        .replace("unknown-agent", &escape_shell_default(agent))
+        .replace("run_started", &escape_shell_default(event_type))
+        .replace("Agent execution event", &escape_shell_default(summary))
 }
 
 /// Inject the Opencode status plugin JS into the given config directory.

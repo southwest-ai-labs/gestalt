@@ -1362,6 +1362,7 @@ dependencies = [
  "rustyline",
  "serde",
  "serde_json",
+ "subtle",
  "synapse-agentic",
  "tempfile",
  "thiserror 1.0.69",

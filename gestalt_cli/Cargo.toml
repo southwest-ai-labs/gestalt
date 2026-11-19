@@ -36,6 +36,7 @@ tokio-tungstenite = "0.26"
 futures-util = "0.3"
 anstyle-parse = "1.0.0"
 colored = "3.0"
+subtle = "2.6"
 
 [dev-dependencies]
 libc = "0.2.191"

@@ -3,9 +3,12 @@ services:
     name: gestalt
     runtime: rust
     region: oregon
-    repo: https://github.com/iberi22/gestalt
+    repo: https://github.com/southwest-ai-labs/gestalt
+    healthCheckPath: /healthz
     buildCommand: cargo build --release -p gestalt_cli
     startCommand: ./target/release/gestalt_cli serve --host 0.0.0.0 --port 10000
     envVars:
       - key: DEEPSEEK_API_KEY
         sync: false
+      - key: GESTALT_API_TOKEN
+        generateValue: true

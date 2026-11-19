@@ -129,6 +129,8 @@ pub fn router() -> Router<BusState> {
         .route("/api/task", post(handle_task_http))
         .route("/api/admin/status", get(crate::admin_telemetry::handle_admin_status))
         .merge(crate::xavier_plugin::router())
+        .layer(middleware::from_fn(crate::bus::auth_middleware))
+        .layer(axum::extract::DefaultBodyLimit::max(2 * 1024 * 1024))
 }
 
 /// Future that resolves when the process should stop accepting connections.
@@ -144,7 +146,18 @@ pub async fn serve(
     port: u16,
     db_path: Option<&str>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    crate::bus::validate_bind_host_and_token(host)?;
     serve_with_shutdown(host, port, db_path, None).await
+}
+
+/// Run the bus + task API HTTP server (alias for serve).
+pub async fn serve_bus_with_task_api(
+    host: &str,
+    port: u16,
+    db_path: Option<&str>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    crate::bus::validate_bind_host_and_token(host)?;
+    serve(host, port, db_path).await
 }
 
 /// Run the bus + task API server, draining in-flight connections when
@@ -156,6 +169,7 @@ pub async fn serve_with_shutdown(
     db_path: Option<&str>,
     shutdown: Option<ShutdownFuture>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    crate::bus::validate_bind_host_and_token(host)?;
     let state_db_path = db_path.map(std::path::PathBuf::from).unwrap_or_else(|| {
         home::home_dir()
             .unwrap_or_else(|| std::path::PathBuf::from("."))

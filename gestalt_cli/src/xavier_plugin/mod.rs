@@ -8,7 +8,10 @@ async fn get_manifest() -> Json<XavierPluginManifest> {
 }
 
 pub fn router<S: Clone + Send + Sync + 'static>() -> Router<S> {
-    Router::new().route("/api/plugin/manifest", get(get_manifest))
+    Router::new()
+        .route("/api/plugin/manifest", get(get_manifest))
+        .layer(axum::middleware::from_fn(crate::bus::auth_middleware))
+        .layer(axum::extract::DefaultBodyLimit::max(2 * 1024 * 1024))
 }
 
 #[cfg(test)]

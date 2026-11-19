@@ -975,12 +975,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     if config.logging.format == "json" {
         tracing_subscriber::registry()
-            .with(fmt::layer().json())
+            .with(fmt::layer().json().with_writer(std::io::stderr))
             .with(filter)
             .init();
     } else {
         tracing_subscriber::registry()
-            .with(fmt::layer())
+            .with(fmt::layer().with_writer(std::io::stderr))
             .with(filter)
             .init();
     }
@@ -1011,6 +1011,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 port,
                 transport,
             } => {
+                crate::bus::validate_bind_host_and_token(&host)?;
                 info!("Starting standalone MCP Server on {}:{}", host, port);
                 println!(
                     "🚀 Starting Standalone MCP Server on {}:{} ({})",
@@ -1051,6 +1052,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         },
 
         Commands::Serve { host, port } => {
+            crate::bus::validate_bind_host_and_token(&host)?;
             info!("Starting MCP Server on {}:{}", host, port);
             println!("🚀 Starting Gestalt MCP Server on {}:{}", host, port);
             println!("📍 URL: http://{}:{}", host, port);
@@ -2145,6 +2147,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         Commands::Bus { action } => match action {
             BusAction::Serve { host, port, db } => {
+                crate::bus::validate_bind_host_and_token(&host)?;
                 // Drain HTTP connections on shutdown instead of dropping them.
                 let serve_guard = shutdown.register_task("bus-serve");
                 let bus_shutdown = shutdown.clone();
