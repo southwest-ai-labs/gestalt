@@ -1,7 +1,8 @@
 [package]
 name = "gestalt_acp"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 description = "Agent Client Protocol (ACP) for Gestalt IDE integration"
 
 [lib]
@@ -9,25 +10,28 @@ name = "gestalt_acp"
 path = "src/lib.rs"
 doctest = false
 
+[lints]
+workspace = true
+
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-thiserror = "1.0"
-anyhow = "1.0"
-async-trait = "0.1"
-mcp-protocol-sdk = "0.5.1"
-gestalt_mcp = { path = "../gestalt_mcp" }
-tokio = { version = "1.0", features = ["full"] }
-tokio-util = "0.7"
-dashmap = "5.5"
-uuid = { version = "1.4", features = ["v4"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+mcp-protocol-sdk = { workspace = true }
+gestalt_mcp = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+dashmap = { workspace = true }
+uuid = { workspace = true }
 similar = "2.6.0"
-axum = { version = "0.8", features = ["ws"] }
-tower = { version = "0.5", features = ["util"] }
+axum = { workspace = true, features = ["ws"] }
+tower = { workspace = true }
 tower-http = { version = "0.6", features = ["cors", "trace"] }
 futures = "0.3"
 tokio-stream = { version = "0.1.19", features = ["sync"] }
 
 [dev-dependencies]
-reqwest = { version = "0.12", features = ["json"] }
-tokio-tungstenite = "0.30.0"
+reqwest = { workspace = true }
+tokio-tungstenite = { workspace = true }

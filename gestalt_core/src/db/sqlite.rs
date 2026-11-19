@@ -56,6 +56,7 @@ CREATE INDEX IF NOT EXISTS idx_embeddings_collection
 ///
 /// This must happen exactly once, before any connection is opened. The result
 /// is memoized so repeated calls are cheap and idempotent.
+#[allow(unsafe_code)]
 fn register_sqlite_vec() -> anyhow::Result<()> {
     static RESULT: OnceLock<Result<(), String>> = OnceLock::new();
 

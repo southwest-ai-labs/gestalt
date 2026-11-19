@@ -1,16 +1,20 @@
 [package]
 name = "synapse-agentic"
-version = "1.0.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
 
 [dependencies]
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-async-trait = "0.1"
-anyhow = "1.0"
-tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros", "sync"] }
-reqwest = { version = "0.12", features = ["json"] }
-tracing = "0.1"
+serde = { workspace = true }
+serde_json = { workspace = true }
+async-trait = { workspace = true }
+anyhow = { workspace = true }
+tokio = { workspace = true }
+reqwest = { workspace = true }
+tracing = { workspace = true }
 
 [features]
 default = []

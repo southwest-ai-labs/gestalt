@@ -1,7 +1,11 @@
 [package]
 name = "gestalt_core"
-version = "1.0.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
 
 [features]
 default = []
@@ -9,53 +13,53 @@ ui-bridge = ["dep:flutter_rust_bridge"]
 
 [dependencies]
 # Async Runtime
-tokio = { version = "1.49.0", features = ["full"] }
-async-trait = "0.1.89"
+tokio = { workspace = true }
+async-trait = { workspace = true }
 
 # Serialization
-serde = { version = "1.0.228", features = ["derive"] }
-serde_json = "1.0.149"
-toml = "1.1"
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
 
 # Networking & Auth
-reqwest = { version = "0.12.28", features = ["json", "stream", "multipart"] }
+reqwest = { workspace = true, features = ["stream", "multipart"] }
 oauth2 = "5.0.0"
 
 # Interop
 flutter_rust_bridge = { version = "=2.12.0", optional = true }
 
 # Error Handling
-thiserror = "1.0.69"
-anyhow = "1.0.100"
+thiserror = { workspace = true }
+anyhow = { workspace = true }
 
 # Logging
-tracing = "0.1.44"
+tracing = { workspace = true }
 
 # Git
-git2 = "0.20.4"
+git2 = { workspace = true }
 
 # OAuth2 helpers
-dirs = "6.0.0"
-chrono = "0.4.43"
+dirs = { workspace = true }
+chrono = { workspace = true }
 url = "2.5.4"
 open = "5.3.3"
 
 # PKCE helpers
-sha2 = "0.10.8"
+sha2 = { workspace = true }
 base64 = "0.23.1"
 rand = "0.10.2"
-uuid = { version = "1.15.1", features = ["v4"] }
-mcp-protocol-sdk = "0.5.1"
+uuid = { workspace = true }
+mcp-protocol-sdk = { workspace = true }
 walkdir = "2.5.0"
-ignore = "0.4.25"
-config = "0.15.19"
-tempfile = "3.24.0"
+ignore = { workspace = true }
+config = { workspace = true }
+tempfile = { workspace = true }
 
 # Database
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { workspace = true }
 sqlite-vec = "0.1"
 
-synapse-agentic = { path = "../synapse-agentic" }
+synapse-agentic = { workspace = true }
 
 [lib]
 crate-type = ["lib", "cdylib", "staticlib"]

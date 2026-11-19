@@ -2,6 +2,7 @@
 // new clippy::double_must_use lint (stable 1.99) flags as redundant. The
 // expansion is outside our control, so allow it crate-wide.
 #![allow(clippy::double_must_use)]
+#![allow(unsafe_code)]
 
 pub mod consensus;
 pub mod agent;

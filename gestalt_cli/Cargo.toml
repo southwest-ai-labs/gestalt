@@ -1,43 +1,47 @@
 [package]
 name = "gestalt_cli"
-version = "1.0.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
 
 [dependencies]
-gestalt_core = { path = "../gestalt_core" }
-synapse-agentic = { path = "../synapse-agentic" }
-tokio = { version = "1.49", features = ["full"] }
-tokio-util = "0.7"
-tower = { version = "0.5", features = ["util"] }
-clap = { version = "4.5", features = ["derive"] }
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
-config = "0.15"
-thiserror = "1.0"
-anyhow = "1.0"
+gestalt_core = { workspace = true }
+synapse-agentic = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+tower = { workspace = true }
+clap = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+config = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
 rustyline = "18.0.1"
-async-trait = "0.1"
-chrono = { version = "0.4", features = ["serde"] }
+async-trait = { workspace = true }
+chrono = { workspace = true }
 ulid = "3.0"
 home = "0.5"
-reqwest = { version = "0.12", features = ["blocking", "json"] }
-gestalt-router = { path = "../gestalt-router" }
-gestalt-state = { path = "../gestalt-state" }
-gestalt-search = { path = "../gestalt-search" }
-gestalt_acp = { path = "../gestalt_acp" }
-uuid = { version = "1.15", features = ["v4", "serde"] }
-rusqlite = { version = "0.32", features = ["bundled"] }
-axum = "0.8"
-toml = "1.1"
-tempfile = "3.24"
-tokio-tungstenite = "0.26"
-futures-util = "0.3"
+reqwest = { workspace = true, features = ["blocking"] }
+gestalt-router = { workspace = true }
+gestalt-state = { workspace = true }
+gestalt-search = { workspace = true }
+gestalt_acp = { workspace = true }
+uuid = { workspace = true, features = ["serde"] }
+rusqlite = { workspace = true }
+axum = { workspace = true }
+toml = { workspace = true }
+tempfile = { workspace = true }
+tokio-tungstenite = { workspace = true }
+futures-util = { workspace = true }
 anstyle-parse = "1.0.0"
 colored = "3.0"
-subtle = "2.6"
+subtle = { workspace = true }
 
 [dev-dependencies]
-libc = "0.2.191"
+libc = { workspace = true }
 tower-service = "0.3"

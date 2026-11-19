@@ -1,3 +1,5 @@
+#![allow(unsafe_code)]
+
 use gestalt_mcp::tools::run_stream::{
     GestaltRunStreamHandler, FORBIDDEN_METACHARS,
 };

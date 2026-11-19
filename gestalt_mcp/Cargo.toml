@@ -1,7 +1,8 @@
 [package]
 name = "gestalt_mcp"
-version = "1.0.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 description = "Gestalt standalone MCP server — exposes Gestalt tools via the Model Context Protocol (HTTP/SSE + stdio)"
 
 [[bin]]
@@ -13,40 +14,43 @@ name = "gestalt_mcp"
 path = "src/lib.rs"
 doctest = false
 
+[lints]
+workspace = true
+
 [dependencies]
-gestalt_core = { path = "../gestalt_core" }
-gestalt_search = { path = "../gestalt-search", package = "gestalt-search" }
-gestalt-state = { path = "../gestalt-state", package = "gestalt-state" }
+gestalt_core = { workspace = true }
+gestalt_search = { workspace = true }
+gestalt-state = { workspace = true }
 
 # Async runtime
-tokio = { version = "1.49", features = ["full"] }
-async-trait = "0.1"
+tokio = { workspace = true }
+async-trait = { workspace = true }
 
 # MCP protocol
-mcp-protocol-sdk = { version = "0.5.1", features = ["http", "stdio"] }
+mcp-protocol-sdk = { workspace = true, features = ["http", "stdio"] }
 
 # CLI
-clap = { version = "4.5", features = ["derive"] }
+clap = { workspace = true }
 
 # Serialization
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "1.0"
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 # Logging
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
 
 # File system
-ignore = "0.4"
+ignore = { workspace = true }
 
 # Lazy statics (task store)
 lazy_static = "1.5"
 
 # UUID (instance id)
-uuid = { version = "1.15", features = ["v4"] }
+uuid = { workspace = true }
 
 # Error handling
-anyhow = "1.0"
+anyhow = { workspace = true }
 
 [dev-dependencies]
-tempfile = "3.8"
+tempfile = { workspace = true }

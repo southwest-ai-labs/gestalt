@@ -1,8 +1,12 @@
 [package]
 name = "gestalt-merge"
-version = "0.1.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
 description = "Gestalt Merge — 3-way merge engine (Phase 2)"
 
+[lints]
+workspace = true
+
 [dependencies]
-thiserror = "2"
+thiserror = { workspace = true }
