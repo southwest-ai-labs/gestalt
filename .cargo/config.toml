@@ -3,5 +3,5 @@
 # broke CI runners (/build/rust-target Permission denied on GitHub Actions).
 
 [alias]
-check-fast = "check -p gestalt_timeline --no-default-features"
-check-full = "check -p gestalt_timeline --features telegram,rag-embeddings"
+check-fast = "check -p gestalt_core"
+check-full = "check -p gestalt_core -p gestalt_cli"

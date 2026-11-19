@@ -4,12 +4,17 @@ mod doctor_nix;
 
 use doctor_nix::check_environment;
 use std::env;
+use std::sync::Mutex;
+
+static ENV_MUTEX: Mutex<()> = Mutex::new(());
 
 #[test]
 fn test_nix_environment_checks() {
+    let _guard = ENV_MUTEX.lock().unwrap();
     // Save original env vars
     let orig_openssl_dir = env::var("OPENSSL_DIR").ok();
     let orig_openssl_lib_dir = env::var("OPENSSL_LIB_DIR").ok();
+    let orig_openssl_include_dir = env::var("OPENSSL_INCLUDE_DIR").ok();
     let orig_pkg_config_path = env::var("PKG_CONFIG_PATH").ok();
     let orig_in_nix_shell = env::var("IN_NIX_SHELL").ok();
     let orig_direnv_dir = env::var("DIRENV_DIR").ok();
@@ -17,18 +22,23 @@ fn test_nix_environment_checks() {
     // Test missing variables case on simulated NixOS
     env::remove_var("OPENSSL_DIR");
     env::remove_var("OPENSSL_LIB_DIR");
+    env::remove_var("OPENSSL_INCLUDE_DIR");
     env::remove_var("PKG_CONFIG_PATH");
     env::remove_var("IN_NIX_SHELL");
     env::remove_var("DIRENV_DIR");
 
     let result = check_environment(true);
     assert!(result.is_nixos);
-    assert_eq!(result.missing_vars.len(), 3);
+    assert_eq!(result.missing_vars.len(), 4);
+    assert!(result
+        .missing_vars
+        .contains(&"OPENSSL_INCLUDE_DIR".to_string()));
     assert!(!result.dev_shell_active);
 
     // Test healthy variables case on simulated NixOS
     env::set_var("OPENSSL_DIR", "/some/path");
     env::set_var("OPENSSL_LIB_DIR", "/some/lib/path");
+    env::set_var("OPENSSL_INCLUDE_DIR", "/some/include/path");
     env::set_var("PKG_CONFIG_PATH", "/some/pkg/path");
     env::set_var("IN_NIX_SHELL", "impure");
 
@@ -40,6 +50,7 @@ fn test_nix_environment_checks() {
     // Test non-NixOS ignores missing vars
     env::remove_var("OPENSSL_DIR");
     env::remove_var("OPENSSL_LIB_DIR");
+    env::remove_var("OPENSSL_INCLUDE_DIR");
     env::remove_var("PKG_CONFIG_PATH");
     let result = check_environment(false);
     assert!(!result.is_nixos);
@@ -49,6 +60,7 @@ fn test_nix_environment_checks() {
     for (key, val) in [
         ("OPENSSL_DIR", orig_openssl_dir),
         ("OPENSSL_LIB_DIR", orig_openssl_lib_dir),
+        ("OPENSSL_INCLUDE_DIR", orig_openssl_include_dir),
         ("PKG_CONFIG_PATH", orig_pkg_config_path),
         ("IN_NIX_SHELL", orig_in_nix_shell),
         ("DIRENV_DIR", orig_direnv_dir),
@@ -58,5 +70,35 @@ fn test_nix_environment_checks() {
         } else {
             env::remove_var(key);
         }
+    }
+}
+
+#[test]
+fn test_openssl_include_dir_verification() {
+    let _guard = ENV_MUTEX.lock().unwrap();
+    let orig = env::var("OPENSSL_INCLUDE_DIR").ok();
+
+    // Verify it is flagged when missing
+    env::remove_var("OPENSSL_INCLUDE_DIR");
+    let res = check_environment(true);
+    assert!(res
+        .missing_vars
+        .contains(&"OPENSSL_INCLUDE_DIR".to_string()));
+
+    // Verify it is satisfied when set
+    env::set_var(
+        "OPENSSL_INCLUDE_DIR",
+        "/nix/store/dummy-openssl-dev/include",
+    );
+    let res = check_environment(true);
+    assert!(!res
+        .missing_vars
+        .contains(&"OPENSSL_INCLUDE_DIR".to_string()));
+
+    // Restore
+    if let Some(v) = orig {
+        env::set_var("OPENSSL_INCLUDE_DIR", v);
+    } else {
+        env::remove_var("OPENSSL_INCLUDE_DIR");
     }
 }

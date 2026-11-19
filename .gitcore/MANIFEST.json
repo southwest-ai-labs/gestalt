@@ -4,7 +4,7 @@
   "phase": "design",
   "protocol": "3.8.0",
   "git_remote": "iberi22/gestalt",
-  "local_path": "/home/belal/proyectosSWAL/gestalt",
+  "local_path": "apps/gestalt",
   "last_update": "2026-07-25",
   "design_doc": "docs/REDESIGN.md",
   "status": "Design complete, MVP pending implementation"

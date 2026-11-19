@@ -2,41 +2,53 @@ name: SWAL Agent Runner CI
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main ]
+
+concurrency:
+  group: swal-agent-runner-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
 
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
+      - name: Checkout Repository
+        uses: actions/checkout@v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v7
-      with:
-        node-version: 22
-        cache: 'npm'
-        cache-dependency-path: swal-agent-runner/package-lock.json
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: swal-agent-runner/package-lock.json
 
-    - name: Install Dependencies
-      run: |
-        cd swal-agent-runner
-        npm install
+      - name: Install Dependencies
+        run: |
+          cd swal-agent-runner
+          npm ci
 
-    - name: Run Linter (TypeScript compilation check)
-      run: |
-        cd swal-agent-runner
-        npm run lint
+      - name: Security Audit
+        run: |
+          cd swal-agent-runner
+          npm audit --audit-level=high
 
-    - name: Run Test Suite
-      run: |
-        cd swal-agent-runner
-        npm run test
+      - name: Run Linter (TypeScript compilation check)
+        run: |
+          cd swal-agent-runner
+          npm run lint
 
-    - name: Build Production Bundle
-      run: |
-        cd swal-agent-runner
-        npm run build
+      - name: Run Test Suite
+        run: |
+          cd swal-agent-runner
+          npm test
+
+      - name: Build Production Bundle
+        run: |
+          cd swal-agent-runner
+          npm run build

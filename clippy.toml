@@ -3,8 +3,8 @@
 
 # Function complexity
 too-many-arguments-threshold = 10
-too-many-lines-threshold = 500
-cognitive-complexity-threshold = 30
+too-many-lines-threshold = 150
+cognitive-complexity-threshold = 25
 
 # Documentation
 doc-valid-idents = ["Xavier", "Gestalt", "MemState", "StateDb", "VirtualFS"]

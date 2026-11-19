@@ -1,4 +1,5 @@
 #![allow(unsafe_code)]
+#![allow(clippy::await_holding_lock)]
 
 use gestalt_mcp::tools::run_stream::{GestaltRunStreamHandler, FORBIDDEN_METACHARS};
 use mcp_protocol_sdk::core::tool::ToolHandler;

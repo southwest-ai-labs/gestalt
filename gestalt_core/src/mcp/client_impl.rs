@@ -53,6 +53,10 @@ pub struct ToolResult {
 }
 
 /// MCP Client trait
+#[deprecated(
+    since = "1.0.0",
+    note = "Use crate::adapters::mcp::McpClientAdapter and crate::ports::outbound::mcp_client::McpClientPort instead"
+)]
 #[async_trait]
 pub trait McpClient: Send + Sync {
     /// Connect to MCP server
@@ -74,6 +78,10 @@ pub trait McpClient: Send + Sync {
 }
 
 /// MCP Client implementation
+#[deprecated(
+    since = "1.0.0",
+    note = "Use crate::adapters::mcp::McpClientAdapter and crate::ports::outbound::mcp_client::McpClientPort instead"
+)]
 #[derive(Clone, Debug)]
 pub struct GestaltMcpClient {
     // Server URL
@@ -84,6 +92,7 @@ pub struct GestaltMcpClient {
     connected: Arc<AtomicBool>,
 }
 
+#[allow(deprecated)]
 impl GestaltMcpClient {
     /// Create a new MCP client
     pub fn new() -> Self {
@@ -114,12 +123,14 @@ impl GestaltMcpClient {
     }
 }
 
+#[allow(deprecated)]
 impl Default for GestaltMcpClient {
     fn default() -> Self {
         Self::new()
     }
 }
 
+#[allow(deprecated)]
 #[async_trait]
 impl McpClient for GestaltMcpClient {
     async fn connect(&self, _server_url: &str) -> Result<(), McpError> {
@@ -188,6 +199,7 @@ impl McpClient for GestaltMcpClient {
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
 

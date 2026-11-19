@@ -20,7 +20,12 @@ fn is_nixos_system() -> bool {
 pub fn check_environment(is_nixos: bool) -> NixCheckResult {
     let mut missing_vars = Vec::new();
     if is_nixos {
-        for var in &["OPENSSL_DIR", "OPENSSL_LIB_DIR", "PKG_CONFIG_PATH"] {
+        for var in &[
+            "OPENSSL_DIR",
+            "OPENSSL_LIB_DIR",
+            "OPENSSL_INCLUDE_DIR",
+            "PKG_CONFIG_PATH",
+        ] {
             if env::var(var).is_err() {
                 missing_vars.push(var.to_string());
             }

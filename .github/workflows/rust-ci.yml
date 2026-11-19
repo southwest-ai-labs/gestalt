@@ -1,0 +1,59 @@
+name: Rust CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: rust-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  rust-ci:
+    name: Rust CI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Rust Toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Cache Cargo Dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "gestalt-rust-ci"
+          cache-on-failure: true
+
+      - name: Check Formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy Linter
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run Workspace Tests
+        run: cargo test --workspace --locked
+
+      - name: Security Audit
+        continue-on-error: true
+        run: |
+          which cargo-audit || cargo install cargo-audit --locked || true
+          cargo audit || true
+
+      - name: Run Skill Lint Tests
+        run: |
+          if [ -f skills/gestalt-acp-ide/tests/skill_lint_test.sh ]; then
+            echo "Running gestalt-acp-ide skill lint test..."
+            bash skills/gestalt-acp-ide/tests/skill_lint_test.sh
+          fi
+          if [ -f skills/gestalt-agent-mesh/tests/skill_lint_test.sh ]; then
+            echo "Running gestalt-agent-mesh skill lint test..."
+            bash skills/gestalt-agent-mesh/tests/skill_lint_test.sh
+          fi

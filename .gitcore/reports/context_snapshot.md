@@ -16,5 +16,5 @@
 
 ## Protocol Signals
 - Forbidden planning files present:
-  - E:\scripts-python\gestalt-rust\.gitcore\planning\PLANNING.md
-  - E:\scripts-python\gestalt-rust\docs\architecture\PLANNING.md
+  - .gitcore/planning/PLANNING.md
+  - docs/architecture/PLANNING.md

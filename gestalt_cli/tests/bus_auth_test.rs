@@ -1,3 +1,5 @@
+#![allow(clippy::await_holding_lock)]
+
 // Integration tests verifying Bearer authentication and payload limits on Gestalt bus endpoints.
 //
 // describe("Bus Bearer Auth & Payload Limit Integration Suite", || {

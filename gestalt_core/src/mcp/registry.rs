@@ -2,12 +2,15 @@
 //!
 //! Registry for MCP tools with execution support.
 
+#![allow(deprecated)]
+
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tokio::time::{timeout, Duration};
 
+#[allow(deprecated)]
 use super::client_impl::{GestaltMcpClient, McpClient, McpError, ToolInfo, ToolResult};
 
 /// Tool context for execution

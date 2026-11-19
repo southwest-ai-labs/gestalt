@@ -19,4 +19,3 @@ tracing = { workspace = true }
 [features]
 default = []
 mcp = []
-db-surreal = []

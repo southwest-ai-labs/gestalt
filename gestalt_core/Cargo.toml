@@ -67,3 +67,12 @@ crate-type = ["lib", "cdylib", "staticlib"]
 
 [dev-dependencies]
 criterion = "0.8.2"
+
+[[bench]]
+name = "core_bench"
+harness = false
+
+[[bench]]
+name = "bench_main"
+harness = false
+

@@ -16,6 +16,22 @@ updates:
       - "dependencies"
       - "rust"
 
+  - package-ecosystem: "npm"
+    directory: "/swal-agent-runner"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
+    labels:
+      - "dependencies"
+      - "javascript"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
